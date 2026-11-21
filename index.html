@@ -124,7 +124,7 @@
         </div>
         <div>
           <span class="font-display text-lg sm:text-xl font-semibold tracking-wide gold-gradient-text block leading-tight">KothaVerse</span>
-          <span class="font-bengali text-[10px] text-ivory/60 tracking-wider block -mt-0.5">শব্দের পরিপাটে, মনের আলাপন</span>
+          <span class="font-bengali text-[10px] text-ivory/60 tracking-wider block -mt-0.5">কথা Verse</span>
         </div>
       </button>
 
@@ -588,13 +588,73 @@
       libraryTab: 'favourites', // 'favourites' | 'bookmarks' | 'journey'
       adminTab: 'overview',
       adminStats: null,
+      adminSubmissions: [],
+      adminSubscribers: [],
       authMode: 'login',
       activePoem: null,
     };
 
     // =========================================================================
-    // 4. UTILITIES (Toast, Confirm Modal, Escaping, Clipboard, Formatting)
+    // 4. UTILITIES (Toast, Confirm Modal, Escaping, Clipboard, Formatting, WA)
     // =========================================================================
+    function formatWANumber(phone) {
+      let clean = String(phone || '').replace(/\D/g, '');
+      if (clean.length === 10) clean = '91' + clean;
+      return clean;
+    }
+
+    function getNewsletterSettings() {
+      const defaults = {
+        upiId: 'kothaverse@upi',
+        fee: '₹99',
+        groupLink: 'https://chat.whatsapp.com/YOUR_GROUP_LINK'
+      };
+      try {
+        const saved = JSON.parse(localStorage.getItem('kv_newsletter_settings') || '{}');
+        return { ...defaults, ...saved };
+      } catch (e) {
+        return defaults;
+      }
+    }
+
+    function saveNewsletterSettings(settings) {
+      localStorage.setItem('kv_newsletter_settings', JSON.stringify(settings));
+    }
+
+    function sendWhatsAppPublishMsg(phone, authorName, poemTitle, poemSlug) {
+      const num = formatWANumber(phone);
+      if (!num) {
+        showToast('লেখকের WhatsApp নম্বর দেওয়া নেই!', 'error');
+        return;
+      }
+      const poemUrl = `${window.location.origin}${window.location.pathname}#poetry/${poemSlug || ''}`;
+      const message = `নমস্কার ${authorName || 'কবি'},\n\nঅভিনন্দন! আপনার লেখা "${poemTitle}" KothaVerse-এ প্রকাশিত হয়েছে।\n\nএখানে পড়ুন: ${poemUrl}\n\n— টিম KothaVerse`;
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    }
+
+    function sendPaymentRequestWA(phone, name) {
+      const num = formatWANumber(phone);
+      if (!num) {
+        showToast('সাবস্ক্রাইবারের WhatsApp নম্বর দেওয়া নেই!', 'error');
+        return;
+      }
+      const cfg = getNewsletterSettings();
+      const message = `নমস্কার ${name || 'বন্ধু'},\n\nKothaVerse Newsletter-এ সাবস্ক্রাইব করার জন্য ধন্যবাদ! আপনার সাবস্ক্রিপশন সক্রিয় করতে ${cfg.fee} পেমেন্ট করুন।\n\nUPI ID: ${cfg.upiId}\n\nপেমেন্ট করার পর অনুগ্রহ করে আপনার Transaction ID বা স্ক্রিনশট এখানে পাঠিয়ে দিন।\n\n— টিম KothaVerse`;
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    }
+
+    function sendGroupLinkWA(phone, name, txnId) {
+      const num = formatWANumber(phone);
+      if (!num) {
+        showToast('সাবস্ক্রাইবারের WhatsApp নম্বর দেওয়া নেই!', 'error');
+        return;
+      }
+      const cfg = getNewsletterSettings();
+      const txnText = txnId ? ` (Txn ID: ${txnId})` : '';
+      const message = `নমস্কার ${name || 'বন্ধু'},\n\nআপনার পেমেন্ট${txnText} যাচাই হয়েছে এবং KothaVerse Newsletter সাবস্ক্রিপশন অনুমোদিত হয়েছে!\n\nআমাদের এক্সক্লুসিভ WhatsApp গ্রুপে যোগ দিন:\n${cfg.groupLink}\n\n— টিম KothaVerse`;
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    }
+
     function escapeHtml(str) {
       if (str === null || str === undefined) return '';
       return String(str)
@@ -1494,10 +1554,11 @@
             <section class="glass-panel rounded-3xl p-8 sm:p-12 border border-antiqueGold/30 text-center">
               <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">Newsletter</span>
               <h2 class="font-bengali text-2xl sm:text-3xl font-bold mt-1 mb-3">নতুন কবিতা ও গল্পের খবর পান সবার আগে</h2>
-              <p class="font-bengali text-sm text-ivory/70 max-w-xl mx-auto mb-6">প্রতি সপ্তাহের নির্বাচিত কবিতা, নতুন অডিও গল্প এবং বিশেষ আবৃত্তির আপডেট সরাসরি আপনার ইনবক্সে।</p>
-              <form onsubmit="handleNewsletterSubmit(event)" class="max-w-lg mx-auto flex flex-col sm:flex-row gap-3">
-                <input id="nl-name" type="text" placeholder="আপনার নাম (ঐচ্ছিক)" class="px-4 py-3 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm font-bengali focus:outline-none focus:border-antiqueGold sm:w-44" />
-                <input id="nl-email" type="email" required placeholder="আপনার ইমেইল ঠিকানা" class="flex-1 px-4 py-3 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold" />
+              <p class="font-bengali text-sm text-ivory/70 max-w-xl mx-auto mb-6">প্রতি সপ্তাহের নির্বাচিত কবিতা, নতুন অডিও গল্প এবং বিশেষ আবৃত্তির আপডেট সরাসরি আপনার ইনবক্স ও WhatsApp-এ।</p>
+              <form onsubmit="handleNewsletterSubmit(event)" class="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <input id="nl-name" type="text" placeholder="আপনার নাম" class="px-4 py-3 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm font-bengali focus:outline-none focus:border-antiqueGold" />
+                <input id="nl-email" type="email" required placeholder="আপনার ইমেইল ঠিকানা*" class="px-4 py-3 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold" />
+                <input id="nl-whatsapp" type="tel" required placeholder="WhatsApp নম্বর (10 digit)*" class="px-4 py-3 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm font-bengali focus:outline-none focus:border-antiqueGold" />
                 <button type="submit" class="px-6 py-3 rounded-xl bg-antiqueGold text-midnight font-bengali font-semibold hover:opacity-90 transition shadow-gold">সাবস্ক্রাইব</button>
               </form>
             </section>
@@ -1523,32 +1584,27 @@
                 <div>
                   <h4 class="text-antiqueGold font-semibold mb-3">যুক্ত থাকুন</h4>
                   <div class="flex items-center gap-3">
-<!-- YouTube -->
-<a href="https://youtube.com" target="_blank" rel="noopener noreferrer"
-   class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory transition-all">
-    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/>
-    </svg>
-</a>
-
-<!-- Facebook -->
-<a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-   class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory transition-all">
-    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.71 4.53-4.71 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.95.93-1.95 1.88v2.29h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07Z"/>
-    </svg>
-</a>
-
-<!-- Instagram -->
-<a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
-   class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory transition-all">
-    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="5"/>
-        <circle cx="12" cy="12" r="4"/>
-        <circle cx="18" cy="6" r="1" fill="currentColor" stroke="none"/>
-    </svg>
-</a>                   
-<button onclick="navigate('contact')" class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory hover:text-antiqueGold"><i data-lucide="mail" class="w-4 h-4"></i></button>
+                    <!-- YouTube -->
+                    <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube" class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory hover:text-antiqueGold transition-all">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/>
+                      </svg>
+                    </a>
+                    <!-- Facebook -->
+                    <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory hover:text-antiqueGold transition-all">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.71 4.53-4.71 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.95.93-1.95 1.88v2.29h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07Z"/>
+                      </svg>
+                    </a>
+                    <!-- Instagram -->
+                    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory hover:text-antiqueGold transition-all">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="5"/>
+                        <circle cx="12" cy="12" r="4"/>
+                        <circle cx="18" cy="6" r="1" fill="currentColor" stroke="none"/>
+                      </svg>
+                    </a>
+                    <button onclick="navigate('contact')" aria-label="Contact" class="p-2.5 rounded-xl bg-deepPurple/60 border border-antiqueGold/25 hover:border-antiqueGold text-ivory hover:text-antiqueGold"><i data-lucide="mail" class="w-4 h-4"></i></button>
                   </div>
                 </div>
               </div>
@@ -1962,7 +2018,7 @@
             <!-- Write With KothaVerse Submission Form -->
             <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30">
               <h2 class="font-bengali text-2xl font-bold text-antiqueGold mb-2">Write With KothaVerse</h2>
-              <p class="font-bengali text-sm text-ivory/70 mb-6">আপনার স্বরচিত কবিতা আমাদের কাছে পাঠান। আমাদের সম্পাদকমণ্ডলী (Admin) রিভিউ করার পর নির্বাচিত লেখা KothaVerse-এ প্রকাশ করা হবে।</p>
+              <p class="font-bengali text-sm text-ivory/70 mb-6">আপনার স্বরচিত কবিতা আমাদের কাছে পাঠান। আমাদের সম্পাদকমণ্ডলী (Admin) রিভিউ করার পর নির্বাচিত লেখা KothaVerse-এ প্রকাশ করা হবে এবং আপনাকে WhatsApp-এ জানানো হবে।</p>
               <form onsubmit="handlePoemSubmission(event)" class="space-y-4 font-bengali">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -1974,11 +2030,17 @@
                     <input id="sub-penname" type="text" required value="${escapeHtml(state.profile?.full_name || '')}" class="w-full px-4 py-2.5 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold" />
                   </div>
                 </div>
-                <div>
-                  <label class="block text-xs text-ivory/80 mb-1">বিভাগ (Category)</label>
-                  <select id="sub-cat" class="w-full px-4 py-2.5 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold">
-                    ${state.categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
-                  </select>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs text-ivory/80 mb-1">বিভাগ (Category)</label>
+                    <select id="sub-cat" class="w-full px-4 py-2.5 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold">
+                      ${state.categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-ivory/80 mb-1">WhatsApp নম্বর*</label>
+                    <input id="sub-whatsapp" type="tel" required placeholder="WhatsApp নম্বর (যেমন: 9876543210)" class="w-full px-4 py-2.5 rounded-xl bg-midnight/80 border border-antiqueGold/25 text-sm focus:outline-none focus:border-antiqueGold" />
+                  </div>
                 </div>
                 <div>
                   <label class="block text-xs text-ivory/80 mb-1">সম্পূর্ণ কবিতা</label>
@@ -2018,6 +2080,7 @@
         user_id: state.user.id,
         title: document.getElementById('sub-title').value.trim(),
         pen_name: document.getElementById('sub-penname').value.trim(),
+        whatsapp_number: document.getElementById('sub-whatsapp').value.trim(),
         body: document.getElementById('sub-body').value.trim(),
         category_id: isUUID(catVal) ? catVal : null,
         status: 'pending'
@@ -2198,13 +2261,20 @@
       e.preventDefault();
       const email = document.getElementById('nl-email').value.trim();
       const name = document.getElementById('nl-name').value.trim() || null;
-      const { error } = await sb.from('newsletter_subscribers').insert({ email, name });
+      const whatsapp_number = document.getElementById('nl-whatsapp').value.trim();
+      const { error } = await sb.from('newsletter_subscribers').insert({
+        name,
+        email,
+        whatsapp_number,
+        payment_status: 'pending',
+        is_active: false
+      });
       if (error) {
         if (error.code === '23505') return showToast('এই ইমেইলটি ইতিমধ্যেই সাবস্ক্রাইব করা আছে!', 'info');
         return showToast('সাবস্ক্রিপশন ব্যর্থ: ' + error.message, 'error');
       }
       e.target.reset();
-      showToast('নিউজলেটারে সফলভাবে সাবস্ক্রাইব হয়েছে!', 'success');
+      showToast('সাবস্ক্রিপশন রিকোয়েস্ট জমা হয়েছে! শীঘ্রই পেমেন্টের জন্য WhatsApp-এ যোগাযোগ করা হবে।', 'success');
     }
 
     async function handleContactSubmit(e) {
@@ -2234,7 +2304,8 @@
         ['categories', 'Categories', 'tags'],
         ['quotes', 'Daily Quotes', 'quote'],
         ['moderation', 'Moderation & Submissions', 'shield-alert'],
-        ['inbox', 'Newsletter & Contact', 'mail']
+        ['inbox', 'Newsletter & Contact', 'mail'],
+        ['users', 'Users & Mail Confirm', 'user-check']
       ];
 
       return `
@@ -2467,23 +2538,30 @@
             sb.from('user_submissions').select('*').order('created_at', { ascending: false }),
             sb.from('content_reports').select('*').order('created_at', { ascending: false })
           ]);
+          state.adminSubmissions = subRes.data || [];
           box.innerHTML = `
             <h2 class="font-bengali text-xl font-bold text-antiqueGold mb-4">পাঠকদের পাঠানো কবিতা (Write With KothaVerse)</h2>
             <div class="space-y-3 mb-8">
-              ${(subRes.data || []).map((s) => `
+              ${state.adminSubmissions.map((s) => `
                 <div class="p-4 rounded-2xl bg-midnight/60 border border-antiqueGold/20">
                   <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <div>
+                    <div class="flex flex-wrap items-center gap-2">
                       <span class="font-bengali font-bold text-base">${escapeHtml(s.title)}</span>
-                      <span class="font-bengali text-xs text-antiqueGold ml-2">— ${escapeHtml(s.pen_name)}</span>
-                      <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-ivory">${s.status}</span>
+                      <span class="font-bengali text-xs text-antiqueGold">— ${escapeHtml(s.pen_name)}</span>
+                      ${s.whatsapp_number ? `<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono">WA: ${escapeHtml(s.whatsapp_number)}</span>` : ''}
+                      <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-ivory">${escapeHtml(s.status)}</span>
                     </div>
-                    ${s.status === 'pending' ? `
-                      <div class="flex gap-2 text-xs font-bengali">
-                        <button onclick="adminReviewSubmission('${s.id}', 'approved')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white">অনুমোদন ও প্রকাশ</button>
-                        <button onclick="adminReviewSubmission('${s.id}', 'rejected')" class="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200">বাতিল</button>
-                      </div>
-                    ` : ''}
+                    <div class="flex flex-wrap gap-2 text-xs font-bengali">
+                      ${s.status === 'pending' ? `
+                        <button onclick="adminReviewSubmission('${s.id}', 'approved')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">অনুমোদন ও প্রকাশ</button>
+                        <button onclick="adminReviewSubmission('${s.id}', 'rejected')" class="px-3 py-1.5 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-red-200">বাতিল</button>
+                      ` : ''}
+                      ${s.status === 'approved' && s.whatsapp_number ? `
+                        <button onclick="adminSendPublishWA('${s.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white flex items-center gap-1.5 transition">
+                          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp মেসেজ পাঠান
+                        </button>
+                      ` : ''}
+                    </div>
                   </div>
                   <p class="font-bengali text-xs text-ivory/75 whitespace-pre-line">${escapeHtml(s.body)}</p>
                 </div>
@@ -2508,22 +2586,89 @@
             sb.from('newsletter_subscribers').select('*').order('subscribed_at', { ascending: false }),
             sb.from('contact_messages').select('*').order('created_at', { ascending: false })
           ]);
+          state.adminSubscribers = nlRes.data || [];
+          const nlCfg = getNewsletterSettings();
+          const statusStyle = {
+            approved: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+            rejected: 'bg-red-500/20 text-red-300 border-red-400/30',
+            pending: 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+          };
           box.innerHTML = `
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h2 class="font-bengali text-lg font-bold text-antiqueGold mb-3">Newsletter Subscribers (${nlRes.data?.length || 0})</h2>
-                <div class="space-y-2 max-h-96 overflow-y-auto">
-                  ${(nlRes.data || []).map((n) => `
-                    <div class="p-3 rounded-xl bg-midnight/50 border border-antiqueGold/15 text-xs flex justify-between">
-                      <span>${escapeHtml(n.email)} ${n.name ? `(${escapeHtml(n.name)})` : ''}</span>
-                      <span class="text-ivory/40">${new Date(n.subscribed_at).toLocaleDateString()}</span>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="lg:col-span-2 space-y-4">
+                <div class="flex items-center justify-between">
+                  <h2 class="font-bengali text-lg font-bold text-antiqueGold">Newsletter Subscribers (${state.adminSubscribers.length})</h2>
+                </div>
+
+                <!-- Newsletter Payment & Group Settings -->
+                <details class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25">
+                  <summary class="cursor-pointer font-bengali text-xs font-semibold text-antiqueGold flex items-center justify-between list-none">
+                    <span class="flex items-center gap-2"><i data-lucide="settings" class="w-4 h-4"></i> Newsletter Payment & Group Settings</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                  </summary>
+                  <form onsubmit="handleSaveNewsletterSettings(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-xs">
+                    <div>
+                      <label class="block text-ivory/70 mb-1">UPI ID</label>
+                      <input id="cfg-upi" type="text" required value="${escapeHtml(nlCfg.upiId)}" class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
                     </div>
-                  `).join('') || '<p class="text-xs text-ivory/50">No subscribers yet.</p>'}
+                    <div>
+                      <label class="block text-ivory/70 mb-1">Subscription Fee</label>
+                      <input id="cfg-fee" type="text" required value="${escapeHtml(nlCfg.fee)}" class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+                    </div>
+                    <div>
+                      <label class="block text-ivory/70 mb-1">WhatsApp Group Link</label>
+                      <input id="cfg-group" type="url" required value="${escapeHtml(nlCfg.groupLink)}" class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+                    </div>
+                    <div class="sm:col-span-3 flex justify-end">
+                      <button type="submit" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-bengali font-semibold">সেটিংস সংরক্ষণ করুন</button>
+                    </div>
+                  </form>
+                </details>
+
+                <!-- Subscribers List -->
+                <div class="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+                  ${state.adminSubscribers.map((n) => {
+                    const pStatus = n.payment_status || (n.is_active ? 'approved' : 'pending');
+                    return `
+                      <div class="p-4 rounded-2xl bg-midnight/55 border border-antiqueGold/15 text-xs space-y-3">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div class="font-bengali font-semibold text-sm text-ivory">
+                              ${escapeHtml(n.name || 'অনামা পাঠক')}
+                              <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] uppercase border ${statusStyle[pStatus] || statusStyle.pending}">${escapeHtml(pStatus)}</span>
+                            </div>
+                            <div class="text-ivory/65 mt-0.5">${escapeHtml(n.email)} ${n.whatsapp_number ? `• <span class="text-emerald-300 font-mono">WA: ${escapeHtml(n.whatsapp_number)}</span>` : ''}</div>
+                            ${n.transaction_id ? `<div class="mt-1 inline-block px-2 py-0.5 rounded-lg bg-deepPurple/70 text-antiqueGold font-mono text-[11px]">Txn ID: ${escapeHtml(n.transaction_id)}</div>` : ''}
+                          </div>
+                          <span class="text-ivory/40">${new Date(n.subscribed_at).toLocaleDateString()}</span>
+                        </div>
+
+                        ${pStatus !== 'approved' ? `
+                          <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-antiqueGold/10">
+                            <button onclick="adminSendPaymentWA('${n.id}')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/35 text-amber-200 hover:bg-amber-500 hover:text-midnight font-semibold transition flex items-center gap-1">
+                              <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Payment Msg (wa.me)
+                            </button>
+                            <input id="txn-${n.id}" type="text" placeholder="Transaction ID লিখুন..." value="${escapeHtml(n.transaction_id || '')}" class="flex-1 min-w-[160px] px-3 py-1.5 rounded-lg bg-midnight border border-antiqueGold/25 font-mono text-xs focus:outline-none focus:border-antiqueGold" />
+                            <button onclick="adminApproveNewsletter('${n.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition">Approve & Group Link</button>
+                            <button onclick="adminRejectNewsletter('${n.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 transition">Reject</button>
+                          </div>
+                        ` : `
+                          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-antiqueGold/10">
+                            <span class="text-emerald-300/80 font-bengali">সক্রিয় সাবস্ক্রাইবার</span>
+                            <button onclick="adminSendGroupLinkWA('${n.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white transition flex items-center gap-1">
+                              <i data-lucide="send" class="w-3.5 h-3.5"></i> Group Link পাঠান (wa.me)
+                            </button>
+                          </div>
+                        `}
+                      </div>
+                    `;
+                  }).join('') || '<p class="text-xs text-ivory/50">No subscribers yet.</p>'}
                 </div>
               </div>
+
               <div>
                 <h2 class="font-bengali text-lg font-bold text-antiqueGold mb-3">Contact Messages (${ctRes.data?.length || 0})</h2>
-                <div class="space-y-3 max-h-96 overflow-y-auto">
+                <div class="space-y-3 max-h-[540px] overflow-y-auto pr-1">
                   ${(ctRes.data || []).map((m) => `
                     <div class="p-3.5 rounded-xl bg-midnight/50 border border-antiqueGold/15 text-xs space-y-1">
                       <div class="flex justify-between font-semibold text-antiqueGold">
@@ -2538,6 +2683,75 @@
               </div>
             </div>
           `;
+        } else if (t === 'users') {
+          const { data: users, error } = await sb.rpc('get_admin_users');
+          if (error) {
+            box.innerHTML = `
+              <div class="p-6 rounded-2xl bg-amber-500/10 border border-amber-400/30 space-y-4 font-bengali">
+                <h2 class="text-lg font-bold text-amber-300 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> Supabase RPC সেটআপ প্রয়োজন</h2>
+                <p class="text-sm text-ivory/85 leading-relaxed">
+                  Admin Panel থেকে সব অ্যাকাউন্ট দেখা এবং ইমেইল কনফার্ম করার জন্য Supabase Dashboard → <strong>SQL Editor</strong>-এ নিচের SQL মাইগ্রেশন স্ক্রিপ্টটি একবার রান করুন।
+                </p>
+                <div class="text-xs text-red-300 font-mono bg-midnight/70 p-3 rounded-xl border border-red-400/20">Error: ${escapeHtml(error.message)}</div>
+                <button onclick="copyAdminMigrationSQL()" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs inline-flex items-center gap-2">
+                  <i data-lucide="copy" class="w-4 h-4"></i> SQL Migration Script কপি করুন
+                </button>
+              </div>
+            `;
+          } else {
+            const list = users || [];
+            const totalUsers = list.length;
+            const unconfirmedCount = list.filter((u) => !u.email_confirmed_at).length;
+            box.innerHTML = `
+              <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <h2 class="font-bengali text-xl font-bold text-antiqueGold">Users & Mail Confirmation</h2>
+                  <p class="font-bengali text-xs text-ivory/65 mt-1">
+                    মোট ইউজার: <strong class="text-ivory">${totalUsers}</strong> •
+                    Unconfirmed Mail: <strong class="${unconfirmedCount > 0 ? 'text-amber-300' : 'text-emerald-300'}">${unconfirmedCount}</strong>
+                  </p>
+                </div>
+                ${unconfirmedCount > 0 ? `
+                  <button onclick="adminConfirmAllEmails()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bengali font-semibold text-xs shadow-gold flex items-center gap-2 transition">
+                    <i data-lucide="check-check" class="w-4 h-4"></i> সব Unconfirmed Mail একসাথে Confirm করুন (${unconfirmedCount})
+                  </button>
+                ` : `<span class="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-bengali text-xs">সব অ্যাকাউন্টের ইমেইল কনফার্মড!</span>`}
+              </div>
+
+              <div class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1">
+                ${list.map((u) => {
+                  const confirmed = !!u.email_confirmed_at;
+                  return `
+                    <div class="p-4 rounded-2xl bg-midnight/55 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="font-bengali font-semibold text-sm text-ivory">${escapeHtml(u.full_name || 'Unnamed User')}</span>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-antiqueGold border border-antiqueGold/25">${escapeHtml(u.role || 'user')}</span>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] border ${confirmed ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30' : 'bg-amber-500/15 text-amber-300 border-amber-400/30'}">
+                            ${confirmed ? 'Confirmed' : 'Unconfirmed'}
+                          </span>
+                        </div>
+                        <div class="text-ivory/65 mt-0.5">${escapeHtml(u.email)} • <span class="text-ivory/40">${new Date(u.created_at).toLocaleDateString()}</span></div>
+                      </div>
+
+                      <div class="flex flex-wrap items-center gap-2">
+                        <select onchange="adminUpdateUserRole('${u.id}', this.value)" class="px-2.5 py-1.5 rounded-lg bg-midnight border border-antiqueGold/25 text-ivory text-xs focus:outline-none focus:border-antiqueGold">
+                          <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+                          <option value="moderator" ${u.role === 'moderator' ? 'selected' : ''}>moderator</option>
+                          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+                        </select>
+                        ${!confirmed ? `
+                          <button onclick="adminConfirmUserEmail('${u.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition flex items-center gap-1">
+                            <i data-lucide="mail-check" class="w-3.5 h-3.5"></i> Confirm Mail
+                          </button>
+                        ` : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('') || '<p class="text-xs text-ivory/50 font-bengali">কোনো ইউজার পাওয়া যায়নি।</p>'}
+              </div>
+            `;
+          }
         }
         lucide.createIcons();
       } catch (err) {
@@ -2688,21 +2902,156 @@
       const { error } = await sb.from('user_submissions').update({ status, reviewed_by: state.user.id }).eq('id', id);
       if (error) return showToast(error.message, 'error');
 
-      // If approved, also publish directly into poems table
+      // If approved, also publish directly into poems table & trigger wa.me notification
       if (status === 'approved' && sub) {
-        await sb.from('poems').insert({
+        const poemSlug = slugify(sub.title);
+        const { error: pubErr } = await sb.from('poems').insert({
           title: sub.title,
-          slug: slugify(sub.title),
+          slug: poemSlug,
           poet_name: sub.pen_name,
           body: sub.body,
           category_id: sub.category_id,
           status: 'published',
           created_by: state.user.id
         });
+        if (pubErr) return showToast('কবিতা প্রকাশে ত্রুটি: ' + pubErr.message, 'error');
+        if (sub.whatsapp_number) {
+          sendWhatsAppPublishMsg(sub.whatsapp_number, sub.pen_name, sub.title, poemSlug);
+        }
       }
       showToast(status === 'approved' ? 'কবিতা অনুমোদিত ও প্রকাশিত হয়েছে!' : 'সাবমিশন বাতিল করা হয়েছে।', 'success');
       await loadAllPublicContent();
       loadAdminTabData();
+    }
+
+    function adminSendPublishWA(subId) {
+      const sub = state.adminSubmissions.find((s) => s.id === subId);
+      if (!sub) return;
+      sendWhatsAppPublishMsg(sub.whatsapp_number, sub.pen_name, sub.title, slugify(sub.title));
+    }
+
+    function handleSaveNewsletterSettings(e) {
+      e.preventDefault();
+      saveNewsletterSettings({
+        upiId: document.getElementById('cfg-upi').value.trim(),
+        fee: document.getElementById('cfg-fee').value.trim(),
+        groupLink: document.getElementById('cfg-group').value.trim()
+      });
+      showToast('Newsletter পেমেন্ট ও গ্রুপ সেটিংস সংরক্ষিত হয়েছে!', 'success');
+    }
+
+    function adminSendPaymentWA(subId) {
+      const n = state.adminSubscribers.find((x) => x.id === subId);
+      if (!n) return;
+      sendPaymentRequestWA(n.whatsapp_number, n.name);
+    }
+
+    async function adminApproveNewsletter(subId) {
+      const n = state.adminSubscribers.find((x) => x.id === subId);
+      if (!n) return;
+      const txnInput = document.getElementById(`txn-${subId}`);
+      const txnId = txnInput ? txnInput.value.trim() : '';
+      if (!txnId) {
+        return showToast('অনুমোদনের আগে Transaction ID লিখুন!', 'error');
+      }
+      const { error } = await sb.from('newsletter_subscribers').update({
+        transaction_id: txnId,
+        payment_status: 'approved',
+        is_active: true,
+        approved_at: new Date().toISOString()
+      }).eq('id', subId);
+      if (error) return showToast('আপডেট ব্যর্থ: ' + error.message, 'error');
+      showToast('সাবস্ক্রিপশন অনুমোদিত হয়েছে! WhatsApp গ্রুপ লিংক খুলছে...', 'success');
+      if (n.whatsapp_number) {
+        sendGroupLinkWA(n.whatsapp_number, n.name, txnId);
+      }
+      loadAdminTabData();
+    }
+
+    async function adminRejectNewsletter(subId) {
+      const { error } = await sb.from('newsletter_subscribers').update({
+        payment_status: 'rejected',
+        is_active: false
+      }).eq('id', subId);
+      if (error) return showToast('আপডেট ব্যর্থ: ' + error.message, 'error');
+      showToast('সাবস্ক্রিপশন বাতিল করা হয়েছে।', 'info');
+      loadAdminTabData();
+    }
+
+    function adminSendGroupLinkWA(subId) {
+      const n = state.adminSubscribers.find((x) => x.id === subId);
+      if (!n) return;
+      sendGroupLinkWA(n.whatsapp_number, n.name, n.transaction_id);
+    }
+
+    async function adminConfirmUserEmail(userId) {
+      const { error } = await sb.rpc('admin_confirm_user_email', { target_user_id: userId });
+      if (error) return showToast('ইমেইল কনফার্ম ব্যর্থ: ' + error.message, 'error');
+      showToast('ইমেইল সফলভাবে কনফার্ম করা হয়েছে!', 'success');
+      loadAdminTabData();
+    }
+
+    function adminConfirmAllEmails() {
+      showConfirmModal(
+        'সব ইমেইল কনফার্ম করবেন?',
+        'সমস্ত Unconfirmed অ্যাকাউন্টের ইমেইল একসাথে Confirmed হিসেবে মার্ক করা হবে।',
+        async () => {
+          const { error } = await sb.rpc('admin_confirm_all_emails');
+          if (error) return showToast('কনফার্ম ব্যর্থ: ' + error.message, 'error');
+          showToast('সব অ্যাকাউন্টের ইমেইল সফলভাবে কনফার্ম হয়েছে!', 'success');
+          loadAdminTabData();
+        }
+      );
+    }
+
+    async function adminUpdateUserRole(userId, newRole) {
+      const { error } = await sb.from('profiles').update({ role: newRole }).eq('id', userId);
+      if (error) return showToast('রোল পরিবর্তন ব্যর্থ: ' + error.message, 'error');
+      showToast(`ইউজারের রোল "${newRole}" হিসেবে আপডেট হয়েছে।`, 'success');
+      loadAdminTabData();
+    }
+
+    function copyAdminMigrationSQL() {
+      const sql = `-- 1. Add WhatsApp & Payment columns
+ALTER TABLE public.user_submissions ADD COLUMN IF NOT EXISTS whatsapp_number TEXT;
+ALTER TABLE public.newsletter_subscribers
+  ADD COLUMN IF NOT EXISTS whatsapp_number TEXT,
+  ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS transaction_id TEXT,
+  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE public.newsletter_subscribers ALTER COLUMN is_active SET DEFAULT FALSE;
+
+-- 2. Admin RPC: Fetch all users with email confirmation status
+CREATE OR REPLACE FUNCTION public.get_admin_users()
+RETURNS TABLE (id UUID, email TEXT, full_name TEXT, role user_role, email_confirmed_at TIMESTAMPTZ, created_at TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  RETURN QUERY
+  SELECT u.id, u.email::TEXT, COALESCE(p.full_name, ''), COALESCE(p.role, 'user'::user_role), u.email_confirmed_at, u.created_at
+  FROM auth.users u LEFT JOIN public.profiles p ON p.id = u.id
+  ORDER BY u.created_at DESC;
+END;
+$$;
+
+-- 3. Admin RPC: Confirm single user email
+CREATE OR REPLACE FUNCTION public.admin_confirm_user_email(target_user_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  UPDATE auth.users SET email_confirmed_at = COALESCE(email_confirmed_at, NOW()) WHERE id = target_user_id;
+END;
+$$;
+
+-- 4. Admin RPC: Confirm all unconfirmed user emails
+CREATE OR REPLACE FUNCTION public.admin_confirm_all_emails()
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  UPDATE auth.users SET email_confirmed_at = NOW() WHERE email_confirmed_at IS NULL;
+END;
+$$;`;
+      copyTextToClipboard(sql);
     }
 
     async function adminResolveReport(id) {
