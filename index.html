@@ -284,6 +284,26 @@ html.light .to-midnight {
   --tw-gradient-via: rgba(250, 248, 252, 0.35) !important;
   --tw-gradient-to: transparent !important;
 }
+    /* Light mode badge text white with dark purple pill background */
+html.light [class*="badge"],
+html.light .badge-text,
+html.light .popup-badge,
+html.light span[class*="rounded-full"][class*="bg-midnight"],
+html.light span[class*="rounded-full"][class*="bg-deepPurple"],
+html.light span[class*="rounded-full"][class*="text-antiqueGold"] {
+  background-color: #352343 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(53, 35, 67, 0.45) !important;
+}
+
+html.light [class*="badge"] *,
+html.light .badge-text *,
+html.light .popup-badge *,
+html.light span[class*="rounded-full"][class*="bg-midnight"] *,
+html.light span[class*="rounded-full"][class*="bg-deepPurple"] *,
+html.light span[class*="rounded-full"][class*="text-antiqueGold"] * {
+  color: #FFFFFF !important;
+}
 
     /* ==================== SPECIAL DAY POPUP ANIMATIONS ==================== */
 @keyframes specialPopupEnter {
