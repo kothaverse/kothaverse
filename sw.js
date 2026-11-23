@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kothaverse-v1';
+const CACHE_NAME = 'kothaverse-v2';
 const ASSETS = [
   './',
   './index.html',
