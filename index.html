@@ -257,71 +257,7 @@ html.light .glass-panel {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.85) !important;
 }
 
-/* ==================== SMOOTH ANIMATIONS ==================== */
-/* 1. Ambient Floating Background Orbs (Makes Glass Blur Visible) */
-.ambient-orb {
-  position: fixed;
-  border-radius: 9999px;
-  filter: blur(90px);
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.35;
-  animation: orbFloat 14s ease-in-out infinite alternate;
-}
-.ambient-orb-1 {
-  width: 340px; height: 340px;
-  top: 8%; left: -6%;
-  background: #6B3FA0;
-}
-.ambient-orb-2 {
-  width: 300px; height: 300px;
-  bottom: 12%; right: -5%;
-  background: #C5A46D;
-  animation-delay: -5s;
-}
-html.light .ambient-orb-1 { background: #7E4BB8; opacity: 0.22; }
-html.light .ambient-orb-2 { background: #352343; opacity: 0.16; }
 
-@keyframes orbFloat {
-  0%   { transform: translate(0, 0) scale(1); }
-  50%  { transform: translate(35px, -25px) scale(1.08); }
-  100% { transform: translate(-20px, 30px) scale(0.96); }
-}
-
-/* 2. Smooth Card Lift & Shimmer */
-.glass-card-hover {
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
-}
-.glass-card-hover:hover {
-  transform: translateY(-6px);
-}
-
-/* 3. Gold Gradient Shimmer on Hero Title */
-.gold-shimmer {
-  background-size: 200% auto;
-  animation: shimmerFlow 6s linear infinite;
-}
-@keyframes shimmerFlow {
-  to { background-position: 200% center; }
-}
-
-/* 4. Gentle Breathing Glow for Play / CTA Buttons */
-.pulse-glow {
-  animation: softGlow 2.8s ease-in-out infinite;
-}
-@keyframes softGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(197, 164, 109, 0.4); }
-  50%      { box-shadow: 0 0 22px 4px rgba(197, 164, 109, 0.28); }
-}
-
-/* 5. Smooth Page & Modal Entrance */
-.fade-in {
-  animation: smoothReveal 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes smoothReveal {
-  from { opacity: 0; transform: translateY(14px) scale(0.99); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
   </style>
 </head>
 <body class="min-h-screen flex flex-col bg-midnight text-ivory selection:bg-antiqueGold/30 selection:text-ivory">
