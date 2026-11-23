@@ -3797,11 +3797,39 @@ function toggleTheme() {
 }
     let isSyncingPosts = false;
 
+// Tomar file-e je nam-e data load function ache, setake age priority-te rakho
+const CANDIDATE_LOADERS = [
+  'loadPosts',
+  'fetchPosts',
+  'loadPoems',
+  'fetchPoems',
+  'loadStories',
+  'fetchStories',
+  'loadContent',
+  'loadData',
+  'renderPosts',
+  'renderAll'
+];
+
+function getPostLoader() {
+  if (typeof window.__KOTHAVERSE_LOADER__ === 'function') {
+    return window.__KOTHAVERSE_LOADER__;
+  }
+  for (const fnName of CANDIDATE_LOADERS) {
+    if (typeof window[fnName] === 'function') {
+      return window[fnName];
+    }
+  }
+  return null;
+}
+
 async function syncPostsFreshly() {
-  if (isSyncingPosts || typeof loadPosts !== 'function') return;
+  const loader = getPostLoader();
+  if (!loader || isSyncingPosts) return;
+
   isSyncingPosts = true;
   try {
-    await loadPosts();
+    await loader();
   } catch (err) {
     console.error('Post sync error:', err);
   } finally {
@@ -3809,15 +3837,20 @@ async function syncPostsFreshly() {
   }
 }
 
-// Protibare 5 second por por update (tab active thakle ar user na likhle)
+// Delete korar por sathe sathe call korar jonno helper
+window.refreshKothaVerseData = syncPostsFreshly;
+
+// Protibare 5 second por por update (tab active thakle, user na likhle, ar audio na cholle)
 setInterval(() => {
   const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-  if (!document.hidden && !isTyping) {
+  const isAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a => !a.paused);
+
+  if (!document.hidden && !isTyping && !isAudioPlaying) {
     syncPostsFreshly();
   }
 }, 5000);
 
-// User jkhon tab-e fire asbe tokhon sathe sathe refresh
+// User jkhon tab-e fire asbe tokhon refresh
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     syncPostsFreshly();
