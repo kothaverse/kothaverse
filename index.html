@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#17121F" />
+  <link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="20261121_192551.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="description" content="KothaVerse — বাংলা কবিতা, আবৃত্তি ও অডিও গল্পের জগৎ। শব্দের পরিপাটে, মনের আলাপন।" />
   <title>KothaVerse — বাংলা কবিতা, আবৃত্তি ও অডিও গল্পের জগৎ</title>
@@ -175,6 +178,14 @@
         <button onclick="openModal('ambient-modal')" id="ambient-nav-btn" title="Sleep & Relax Ambient Sounds" class="p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition">
           <i data-lucide="cloud-rain" class="w-4 h-4"></i>
         </button>
+        <button onclick="openNotificationsModal()" title="নোটিফিকেশন" class="relative p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition">
+  <i data-lucide="bell" class="w-4 h-4"></i>
+  <span id="notif-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">0</span>
+</button>
+<button id="pwa-install-btn" onclick="installPWA()" class="hidden px-3 py-1.5 rounded-xl bg-antiqueGold/20 border border-antiqueGold/45 text-antiqueGold text-xs font-bengali font-semibold hover:bg-antiqueGold hover:text-midnight transition flex items-center gap-1.5">
+  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+  <span class="hidden sm:inline">App ইনস্টল</span>
+</button>
 
         <button onclick="toggleLanguage()" id="lang-toggle-btn" title="Switch Language (BN/EN)" class="hidden sm:inline-flex px-2.5 py-1.5 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-[11px] font-semibold text-antiqueGold hover:bg-antiqueGold hover:text-midnight transition">
           EN
@@ -576,6 +587,39 @@
       </div>
     </div>
   </div>
+  <!-- Special Day Announcement Popup -->
+<div id="special-popup-modal" class="fixed inset-0 z-[75] hidden overflow-y-auto">
+  <div onclick="dismissSpecialPopup()" class="fixed inset-0 bg-black/80 backdrop-blur-sm"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div id="special-popup-body" class="relative w-full max-w-md glass-panel bg-midnight/95 rounded-3xl border border-antiqueGold/45 shadow-2xl overflow-hidden fade-in text-center">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+</div>
+<!-- Poet / Reciter Profile Modal -->
+<div id="poet-profile-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+  <div onclick="closeModal('poet-profile-modal')" class="fixed inset-0 bg-black/80 backdrop-blur-sm"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div id="poet-profile-body" class="relative w-full max-w-2xl glass-panel bg-midnight/95 rounded-3xl border border-antiqueGold/35 p-6 sm:p-8 shadow-2xl fade-in"></div>
+  </div>
+</div>
+
+<!-- Notifications Center Modal -->
+<div id="notifications-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+  <div onclick="closeModal('notifications-modal')" class="fixed inset-0 bg-black/80 backdrop-blur-sm"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="relative w-full max-w-md glass-panel bg-midnight/95 rounded-3xl border border-antiqueGold/35 p-6 shadow-2xl fade-in font-bengali">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-antiqueGold flex items-center gap-2"><i data-lucide="bell" class="w-5 h-5"></i> নোটিফিকেশন</h3>
+        <button onclick="closeModal('notifications-modal')" class="p-1.5 rounded-lg hover:bg-deepPurple/60"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <button id="enable-push-btn" onclick="requestNotificationPermission()" class="w-full mb-4 py-2 px-3 rounded-xl bg-antiqueGold/15 border border-antiqueGold/40 text-antiqueGold text-xs font-semibold hover:bg-antiqueGold hover:text-midnight transition flex items-center justify-center gap-2">
+        <i data-lucide="bell-ring" class="w-4 h-4"></i> নতুন পোস্টের অ্যালার্ট চালু করুন (PWA / Browser)
+      </button>
+      <div id="notifications-list" class="space-y-2.5 max-h-80 overflow-y-auto"></div>
+    </div>
+  </div>
+</div>
 
   <!-- 7. Custom Confirmation Modal -->
   <div id="confirm-modal" class="fixed inset-0 z-[70] hidden">
@@ -771,6 +815,93 @@
         nav_community: 'Community', nav_library: 'My Library', nav_about: 'About', nav_contact: 'Contact'
       }
     };
+    let activeSpecialPopup = null;
+
+async function checkAndShowSpecialPopup(forcePreview = false) {
+  try {
+    const { data } = await sb
+      .from('special_popups')
+      .select('*')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (!data || !data.length) return;
+    const pop = data[0];
+    activeSpecialPopup = pop;
+
+    // Same session-e user close kore dile abar dekhabe na (jodi na admin update kore)
+    const seenKey = `kv_popup_seen_${pop.updated_at}`;
+    if (!forcePreview && sessionStorage.getItem(seenKey)) return;
+
+    const body = document.getElementById('special-popup-body');
+    const isExternal = pop.button_link && /^https?:\/\//i.test(pop.button_link);
+    const btnAction = isExternal
+      ? `window.open('${escapeHtml(pop.button_link)}', '_blank', 'noopener'); dismissSpecialPopup();`
+      : pop.button_link
+        ? `navigate('${escapeHtml(pop.button_link)}'); dismissSpecialPopup();`
+        : `dismissSpecialPopup();`;
+
+    body.innerHTML = `
+      <button onclick="dismissSpecialPopup()" class="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-midnight/75 text-ivory hover:text-antiqueGold">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      ${pop.image_url ? `<img src="${escapeHtml(pop.image_url)}" alt="${escapeHtml(pop.title)}" class="w-full h-48 object-cover border-b border-antiqueGold/20" />` : ''}
+      <div class="p-6 sm:p-7 space-y-3 font-bengali">
+        ${pop.badge_text ? `<span class="inline-block px-3 py-1 rounded-full text-[11px] bg-antiqueGold/20 text-antiqueGold border border-antiqueGold/35">${escapeHtml(pop.badge_text)}</span>` : ''}
+        <h3 class="text-2xl font-bold gold-gradient-text">${escapeHtml(pop.title)}</h3>
+        <p class="text-sm text-ivory/80 whitespace-pre-line leading-relaxed">${escapeHtml(pop.message)}</p>
+        <div class="pt-3 flex justify-center gap-2">
+          ${pop.button_text ? `<button onclick="${btnAction}" class="px-6 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-sm shadow-gold hover:opacity-90 transition">${escapeHtml(pop.button_text)}</button>` : ''}
+          <button onclick="dismissSpecialPopup()" class="px-4 py-2.5 rounded-xl border border-ivory/20 text-xs text-ivory/75 hover:bg-deepPurple/50">বন্ধ করুন</button>
+        </div>
+      </div>
+    `;
+    openModal('special-popup-modal');
+  } catch (e) { /* Silent */ }
+}
+
+function dismissSpecialPopup() {
+  if (activeSpecialPopup) {
+    sessionStorage.setItem(`kv_popup_seen_${activeSpecialPopup.updated_at}`, '1');
+  }
+  closeModal('special-popup-modal');
+}
+
+function previewSpecialPopup() {
+  checkAndShowSpecialPopup(true);
+}
+
+async function adminSavePopup(e) {
+  e.preventDefault();
+  try {
+    const id = document.getElementById('sp-id').value;
+    const imgFile = document.getElementById('sp-img-file').files[0];
+    let image_url = document.getElementById('sp-existing-img').value || null;
+    if (imgFile) image_url = await uploadToBucket('covers', imgFile);
+
+    const payload = {
+      badge_text: document.getElementById('sp-badge').value.trim(),
+      title: document.getElementById('sp-title').value.trim(),
+      message: document.getElementById('sp-message').value.trim(),
+      button_text: document.getElementById('sp-btn-text').value.trim(),
+      button_link: document.getElementById('sp-btn-link').value.trim() || null,
+      image_url,
+      is_active: document.getElementById('sp-active').checked,
+      updated_at: new Date().toISOString()
+    };
+
+    const res = id
+      ? await sb.from('special_popups').update(payload).eq('id', id)
+      : await sb.from('special_popups').insert(payload);
+
+    if (res.error) throw res.error;
+    showToast('Special Popup সফলভাবে আপডেট হয়েছে!', 'success');
+    loadAdminTabData();
+  } catch (err) {
+    showToast('ত্রুটি: ' + err.message, 'error');
+  }
+}
 
     function applySiteSettings() {
       const cfg = getSiteSettings();
@@ -2148,7 +2279,7 @@
           <div class="p-5 flex-1 flex flex-col justify-between">
             <div>
               <h3 onclick="openPoemModal('${p.id}')" class="font-bengali text-xl font-bold text-ivory hover:text-antiqueGold cursor-pointer mb-1">${escapeHtml(p.title)}</h3>
-              <p class="font-bengali text-xs text-antiqueGold/90 mb-3">— ${escapeHtml(p.poet_name)}</p>
+              <button onclick="openPoetProfile('${escapeHtml(p.poet_name)}')" class="font-bengali text-xs text-antiqueGold/90 hover:underline">— ${escapeHtml(p.poet_name)}</button>
               <p class="font-bengali text-sm text-ivory/70 line-clamp-3 leading-relaxed">${escapeHtml(p.excerpt || p.body)}</p>
             </div>
             <div class="mt-5 pt-3 border-t border-antiqueGold/15 flex items-center justify-between gap-2">
@@ -2159,6 +2290,10 @@
                 <button onclick="toggleLibraryFlag('poem','${p.id}','is_bookmarked')" title="Bookmark" class="p-2 rounded-lg hover:bg-deepPurple/60 ${lib?.is_bookmarked ? 'text-antiqueGold' : 'text-ivory/60'}"><i data-lucide="bookmark" class="w-3.5 h-3.5 ${lib?.is_bookmarked ? 'fill-current' : ''}"></i></button>
               </div>
             </div>
+            <div class="flex items-center justify-between mb-3">
+  <span id="poem-views-${p.id}" class="text-[11px] text-ivory/50 font-bengali">${p.views_count || 0} পাঠ</span>
+</div>
+
           </div>
         </article>
       `;
@@ -2226,6 +2361,7 @@
       const p = state.poems.find((x) => x.id === poemId);
       if (!p) return;
       state.activePoem = p;
+      trackPoemView(p);
       recordReadingHistory(p);
       const lib = getLibraryEntry('poem', p.id);
       const related = state.poems.filter((x) => x.id !== p.id && x.category_id === p.category_id).slice(0, 2);
@@ -2886,6 +3022,7 @@
         ['moderation', 'Moderation & Submissions', 'shield-alert'],
         ['inbox', 'Newsletter & Contact', 'mail'],
         ['users', 'Users & Mail Confirm', 'user-check'],
+        ['popup', 'Special Popup', 'bell-ring'],
         ['settings', 'Website Settings', 'settings']
       ];
 
@@ -3227,6 +3364,57 @@
               `).join('') || '<p class="text-xs text-ivory/50 font-bengali">কোনো কোট নেই।</p>'}
             </div>
           `;
+        } else if (t === 'popup') {
+  const { data: rows } = await sb.from('special_popups').select('*').order('updated_at', { ascending: false }).limit(1);
+  const pop = rows && rows.length ? rows[0] : null;
+  box.innerHTML = `
+    <h2 class="font-bengali text-xl font-bold text-antiqueGold mb-2">Special Day Popup Manager</h2>
+    <p class="font-bengali text-xs text-ivory/65 mb-5">যেকোনো বিশেষ দিন বা উৎসবের পপ-আপ এখান থেকে চালু, বন্ধ বা আপডেট করুন।</p>
+    <form onsubmit="adminSavePopup(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 rounded-2xl bg-midnight/60 border border-antiqueGold/20 text-sm font-bengali">
+      <input type="hidden" id="sp-id" value="${escapeHtml(pop?.id || '')}" />
+      <input type="hidden" id="sp-existing-img" value="${escapeHtml(pop?.image_url || '')}" />
+
+      <div>
+        <label class="block text-xs text-ivory/70 mb-1">ব্যাজ টেক্সট (যেমন: শুভ নববর্ষ / বিশেষ ঘোষণা)</label>
+        <input id="sp-badge" value="${escapeHtml(pop?.badge_text || 'বিশেষ ঘোষণা')}" class="w-full px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+      </div>
+      <div>
+        <label class="block text-xs text-ivory/70 mb-1">পপ-আপ শিরোনাম*</label>
+        <input id="sp-title" required value="${escapeHtml(pop?.title || '')}" placeholder="যেমন: শুভ রবীন্দ্র জয়ন্তী!" class="w-full px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-xs text-ivory/70 mb-1">বার্তা (Message)*</label>
+        <textarea id="sp-message" required rows="3" placeholder="বিশেষ দিনের শুভেচ্ছা বা ঘোষণার বিবরণ..." class="w-full px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25">${escapeHtml(pop?.message || '')}</textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs text-ivory/70 mb-1">বাটন টেক্সট (ঐচ্ছিক)</label>
+        <input id="sp-btn-text" value="${escapeHtml(pop?.button_text || 'এখনই দেখুন')}" class="w-full px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+      </div>
+      <div>
+        <label class="block text-xs text-ivory/70 mb-1">বাটন লিংক / রুট (যেমন: poetry, audio-stories বা https://...)</label>
+        <input id="sp-btn-link" value="${escapeHtml(pop?.button_link || '')}" placeholder="poetry বা https://..." class="w-full px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-ivory/70 mb-1">ব্যানার ছবি আপলোড (ঐচ্ছিক)</label>
+        <input id="sp-img-file" type="file" accept="image/*" class="w-full text-xs mt-1" />
+        ${pop?.image_url ? `<p class="text-[11px] text-emerald-300 mt-1">বর্তমান ছবি সেট করা আছে</p>` : ''}
+      </div>
+      <div class="flex items-center">
+        <label class="flex items-center gap-2.5 cursor-pointer px-4 py-2.5 rounded-xl bg-deepPurple/50 border border-antiqueGold/30">
+          <input id="sp-active" type="checkbox" ${pop?.is_active ? 'checked' : ''} class="accent-antiqueGold w-4 h-4" />
+          <span class="font-semibold text-antiqueGold">ওয়েবসাইটে পপ-আপ চালু রাখুন (Active)</span>
+        </label>
+      </div>
+
+      <div class="md:col-span-2 flex flex-wrap gap-3 pt-2">
+        <button type="submit" class="px-6 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">পপ-আপ আপডেট করুন</button>
+        ${pop ? `<button type="button" onclick="previewSpecialPopup()" class="px-4 py-2.5 rounded-xl border border-antiqueGold/35 text-antiqueGold">প্রিভিউ দেখুন</button>` : ''}
+      </div>
+    </form>
+  `;
         } else if (t === 'moderation') {
           const [subRes, repRes] = await Promise.all([
             sb.from('user_submissions').select('*').order('created_at', { ascending: false }),
@@ -3655,63 +3843,75 @@
     }
 
     async function adminSavePoem(e) {
-      e.preventDefault();
-      try {
-        const id = document.getElementById('ap-id').value;
-        const title = document.getElementById('ap-title').value.trim();
-        const coverFile = document.getElementById('ap-cover-file').files[0];
-        const audioFile = document.getElementById('ap-audio-file').files[0];
+  e.preventDefault();
+  try {
+    const id = document.getElementById('ap-id').value;
+    const title = document.getElementById('ap-title').value.trim();
+    const coverFile = document.getElementById('ap-cover-file').files[0];
+    const audioFile = document.getElementById('ap-audio-file').files[0];
 
-        const payload = {
-          title,
-          poet_name: document.getElementById('ap-poet').value.trim(),
-          category_id: document.getElementById('ap-cat').value || null,
-          status: document.getElementById('ap-status').value,
-          publish_at: document.getElementById('ap-publish-at').value ? new Date(document.getElementById('ap-publish-at').value).toISOString() : null,
-          is_featured: document.getElementById('ap-featured').checked,
-          seo_title: document.getElementById('ap-seo-title').value.trim() || null,
-          seo_description: document.getElementById('ap-seo-desc').value.trim() || null,
-          body: document.getElementById('ap-body').value.trim(),
-          created_by: state.user.id
-        };
-        if (coverFile) payload.cover_image_url = await uploadToBucket('covers', coverFile);
-        if (audioFile) payload.audio_url = await uploadToBucket('audio', audioFile);
+    const payload = {
+      title,
+      poet_name: document.getElementById('ap-poet').value.trim(),
+      category_id: document.getElementById('ap-cat').value || null,
+      status: document.getElementById('ap-status').value,
+      publish_at: document.getElementById('ap-publish-at').value ? new Date(document.getElementById('ap-publish-at').value).toISOString() : null,
+      is_featured: document.getElementById('ap-featured').checked,
+      seo_title: document.getElementById('ap-seo-title').value.trim() || null,
+      seo_description: document.getElementById('ap-seo-desc').value.trim() || null,
+      body: document.getElementById('ap-body').value.trim(),
+      created_by: state.user.id
+    };
+    if (coverFile) payload.cover_image_url = await uploadToBucket('covers', coverFile);
+    if (audioFile) payload.audio_url = await uploadToBucket('audio', audioFile);
 
-        let res;
-        if (id) res = await sb.from('poems').update(payload).eq('id', id);
-        else {
-          payload.slug = slugify(title);
-          res = await sb.from('poems').insert(payload);
-        }
-        if (res.error) throw res.error;
-        showToast('কবিতা সংরক্ষিত হয়েছে!', 'success');
-        await loadAllPublicContent();
-        loadAdminTabData();
-      } catch (err) {
-        showToast('ত্রুটি: ' + err.message, 'error');
-      }
+    let res;
+    if (id) {
+      res = await sb.from('poems').update(payload).eq('id', id);
+    } else {
+      payload.slug = slugify(title);
+      res = await sb.from('poems').insert(payload);
     }
 
-    async function adminSaveStory(e) {
-      e.preventDefault();
-      try {
-        const title = document.getElementById('as-title').value.trim();
-        const coverUrl = await uploadToBucket('covers', document.getElementById('as-cover-file').files[0]);
-        const audioUrl = await uploadToBucket('audio', document.getElementById('as-audio-file').files[0]);
-        const { error } = await sb.from('audio_stories').insert({
-          title, slug: slugify(title),
-          author_name: document.getElementById('as-author').value.trim(),
-          narrator_name: document.getElementById('as-narrator').value.trim(),
-          duration_sec: parseInt(document.getElementById('as-duration').value, 10) || 0,
-          description: document.getElementById('as-desc').value.trim(),
-          cover_image_url: coverUrl, audio_url: audioUrl, status: 'published', created_by: state.user.id
-        });
-        if (error) throw error;
-        showToast('অডিও গল্প যুক্ত হয়েছে!', 'success');
-        await loadAllPublicContent();
-        loadAdminTabData();
-      } catch (err) { showToast('ত্রুটি: ' + err.message, 'error'); }
+    if (res.error) throw res.error;
+
+    if (!id && payload.status === 'published') {
+      await sendPostNotification('নতুন কবিতা প্রকাশিত!', `"${title}" — ${payload.poet_name}`, 'poetry');
     }
+
+    showToast('কবিতা সংরক্ষিত হয়েছে!', 'success');
+    await loadAllPublicContent();
+    loadAdminTabData();
+  } catch (err) {
+    showToast('ত্রুটি: ' + err.message, 'error');
+  }
+}
+
+async function adminSaveStory(e) {
+  e.preventDefault();
+  try {
+    const title = document.getElementById('as-title').value.trim();
+    const coverUrl = await uploadToBucket('covers', document.getElementById('as-cover-file').files[0]);
+    const audioUrl = await uploadToBucket('audio', document.getElementById('as-audio-file').files[0]);
+    const { error } = await sb.from('audio_stories').insert({
+      title, slug: slugify(title),
+      author_name: document.getElementById('as-author').value.trim(),
+      narrator_name: document.getElementById('as-narrator').value.trim(),
+      duration_sec: parseInt(document.getElementById('as-duration').value, 10) || 0,
+      description: document.getElementById('as-desc').value.trim(),
+      cover_image_url: coverUrl, audio_url: audioUrl, status: 'published', created_by: state.user.id
+    });
+    if (error) throw error;
+
+    await sendPostNotification('নতুন অডিও গল্প!', `"${title}" এখন শুনুন KothaVerse-এ।`, 'audio-stories');
+
+    showToast('অডিও গল্প যুক্ত হয়েছে!', 'success');
+    await loadAllPublicContent();
+    loadAdminTabData();
+  } catch (err) {
+    showToast('ত্রুটি: ' + err.message, 'error');
+  }
+}
 
     async function adminSaveRecitation(e) {
       e.preventDefault();
@@ -3961,12 +4161,185 @@ $$;`;
         readingMode.close();
       }
     });
+    // =========================================================================
+// LIVE VIEW COUNT, POET PROFILE & FOLLOW, NOTIFICATION ENGINE
+// =========================================================================
+
+// 1. Live View Count (called inside openPoemModal)
+async function trackPoemView(poem) {
+  if (!poem || !isUUID(poem.id)) return;
+  const key = `kv_viewed_${poem.id}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  try {
+    const { data: newCount } = await sb.rpc('increment_poem_views', { p_id: poem.id });
+    if (typeof newCount === 'number') {
+      poem.views_count = newCount;
+      const el = document.getElementById(`poem-views-${poem.id}`);
+      if (el) el.textContent = `${newCount} পাঠ`;
+    }
+  } catch (e) { /* Silent */ }
+}
+
+// 2. Poet / Reciter Profile & Follow System
+async function openPoetProfile(name) {
+  const cleanName = String(name || '').replace(/^(কণ্ঠ:|আবৃত্তি:)\s*/i, '').trim();
+  if (!cleanName) return;
+
+  const poems = state.poems.filter((p) => (p.poet_name || '').includes(cleanName));
+  const stories = state.audioStories.filter((s) => (s.author_name || '').includes(cleanName) || (s.narrator_name || '').includes(cleanName));
+  const recs = state.recitations.filter((r) => (r.poet_name || '').includes(cleanName) || (r.reciter_name || '').includes(cleanName));
+
+  const { count: followerCount } = await sb.from('poet_follows').select('*', { count: 'exact', head: true }).eq('poet_name', cleanName);
+  let isFollowing = false;
+  if (state.user) {
+    const { data: myFollow } = await sb.from('poet_follows').select('id').eq('user_id', state.user.id).eq('poet_name', cleanName).maybeSingle();
+    isFollowing = !!myFollow;
+  }
+
+  document.getElementById('poet-profile-body').innerHTML = `
+    <button onclick="closeModal('poet-profile-modal')" class="absolute top-5 right-5 p-1.5 rounded-lg hover:bg-deepPurple/60"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <div class="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-antiqueGold/20 font-bengali">
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-antiqueGold/20 border border-antiqueGold/40 flex items-center justify-center text-2xl font-bold text-antiqueGold">
+          ${escapeHtml(cleanName[0])}
+        </div>
+        <div>
+          <h2 class="text-2xl font-bold text-ivory">${escapeHtml(cleanName)}</h2>
+          <p class="text-xs text-ivory/65 mt-0.5">অনুসারী (Followers): <strong class="text-antiqueGold">${followerCount || 0}</strong> • মোট প্রকাশনা: ${poems.length + stories.length + recs.length}</p>
+        </div>
+      </div>
+      <button onclick="toggleFollowPoet('${escapeHtml(cleanName)}', ${isFollowing})" class="px-5 py-2.5 rounded-xl font-semibold text-xs transition flex items-center gap-1.5 ${isFollowing ? 'bg-deepPurple border border-antiqueGold/40 text-antiqueGold' : 'bg-antiqueGold text-midnight shadow-gold'}">
+        <i data-lucide="${isFollowing ? 'user-check' : 'user-plus'}" class="w-4 h-4"></i>
+        ${isFollowing ? 'Following' : 'Follow করুন'}
+      </button>
+    </div>
+
+    <div class="mt-5 space-y-4 max-h-[55vh] overflow-y-auto font-bengali">
+      ${poems.length ? `
+        <div>
+          <h4 class="text-xs text-antiqueGold font-semibold mb-2">কবিতা (${poems.length})</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            ${poems.map((p) => `<button onclick="closeModal('poet-profile-modal'); openPoemModal('${p.id}')" class="text-left p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 hover:border-antiqueGold"><div class="font-semibold text-sm">${escapeHtml(p.title)}</div><div class="text-[11px] text-ivory/55">${p.views_count || 0} পাঠ</div></button>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+      ${stories.length ? `
+        <div>
+          <h4 class="text-xs text-antiqueGold font-semibold mb-2">অডিও গল্প (${stories.length})</h4>
+          <div class="space-y-2">
+            ${stories.map((s) => `<button onclick="closeModal('poet-profile-modal'); playStory('${s.id}')" class="w-full text-left p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 hover:border-antiqueGold flex justify-between items-center"><span class="text-sm font-semibold">${escapeHtml(s.title)}</span><span class="text-xs text-antiqueGold">▶ শুনুন</span></button>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+      ${recs.length ? `
+        <div>
+          <h4 class="text-xs text-antiqueGold font-semibold mb-2">আবৃত্তি (${recs.length})</h4>
+          <div class="space-y-2">
+            ${recs.map((r) => `<button onclick="closeModal('poet-profile-modal'); playRecitation('${r.id}')" class="w-full text-left p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 hover:border-antiqueGold flex justify-between items-center"><span class="text-sm font-semibold">${escapeHtml(r.title)}</span><span class="text-xs text-antiqueGold">▶ শুনুন</span></button>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  openModal('poet-profile-modal');
+}
+
+async function toggleFollowPoet(poetName, currentlyFollowing) {
+  if (!state.user) {
+    showToast('ফলো করতে আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  if (currentlyFollowing) {
+    await sb.from('poet_follows').delete().eq('user_id', state.user.id).eq('poet_name', poetName);
+    showToast(`${poetName}-কে Unfollow করা হয়েছে।`, 'info');
+  } else {
+    await sb.from('poet_follows').insert({ user_id: state.user.id, poet_name: poetName });
+    showToast(`আপনি এখন ${poetName}-কে Follow করছেন!`, 'success');
+  }
+  openPoetProfile(poetName);
+}
+
+// 3. Notification System (In-App + Browser/PWA Alert)
+let appNotifications = [];
+
+async function initNotifications() {
+  const { data } = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(15);
+  appNotifications = data || [];
+  updateNotifBadge();
+
+  // Real-time listener: new post publish holei instant alert
+  sb.channel('kv-notifications')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+      const n = payload.new;
+      appNotifications.unshift(n);
+      updateNotifBadge();
+      showToast(`🔔 ${n.title}: ${n.message}`, 'info');
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(n.title, { body: n.message, icon: '20261121_192551.png' });
+      }
+    })
+    .subscribe();
+}
+
+function updateNotifBadge() {
+  const lastSeen = localStorage.getItem('kv_notif_seen_at') || '1970-01-01';
+  const unread = appNotifications.filter((n) => n.created_at > lastSeen).length;
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  if (unread > 0) {
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function openNotificationsModal() {
+  localStorage.setItem('kv_notif_seen_at', new Date().toISOString());
+  updateNotifBadge();
+
+  const pushBtn = document.getElementById('enable-push-btn');
+  if (pushBtn && 'Notification' in window && Notification.permission === 'granted') {
+    pushBtn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> অ্যালার্ট চালু আছে`;
+  }
+
+  const list = document.getElementById('notifications-list');
+  list.innerHTML = appNotifications.length ? appNotifications.map((n) => `
+    <button onclick="closeModal('notifications-modal'); navigate('${escapeHtml(n.route || 'home')}')" class="w-full text-left p-3.5 rounded-2xl bg-deepPurple/35 border border-antiqueGold/15 hover:border-antiqueGold transition">
+      <div class="text-sm font-semibold text-antiqueGold">${escapeHtml(n.title)}</div>
+      <p class="text-xs text-ivory/80 mt-0.5">${escapeHtml(n.message)}</p>
+      <div class="text-[10px] text-ivory/45 mt-1">${new Date(n.created_at).toLocaleString('bn-BD')}</div>
+    </button>
+  `).join('') : `<p class="text-xs text-ivory/50 text-center py-6">এখনো কোনো নোটিফিকেশন নেই।</p>`;
+
+  openModal('notifications-modal');
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return showToast('আপনার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।', 'error');
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    showToast('নোটিফিকেশন চালু হয়েছে! নতুন পোস্ট এলেই অ্যালার্ট পাবেন।', 'success');
+    openNotificationsModal();
+  } else {
+    showToast('নোটিফিকেশন অনুমতি দেওয়া হয়নি।', 'info');
+  }
+}
+
+async function sendPostNotification(title, message, route) {
+  await sb.from('notifications').insert({ title, message, route });
+}
 
     async function initApp() {
       applySiteSettings();
       audioEngine.init();
       await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
       navigate('home');
+      initNotifications();
+      setTimeout(() => checkAndShowSpecialPopup(false), 1200);
+
 
       sb.auth.onAuthStateChange(async () => {
         await loadSessionAndProfile();
@@ -3974,6 +4347,40 @@ $$;`;
     }
 
     window.addEventListener('DOMContentLoaded', initApp);
+    // =========================================================================
+// PWA SERVICE WORKER & INSTALL PROMPT
+// =========================================================================
+let deferredPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwa-install-btn')?.classList.remove('hidden');
+});
+
+async function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('KothaVerse App ইনস্টল হচ্ছে!', 'success');
+  }
+  deferredPrompt = null;
+  document.getElementById('pwa-install-btn')?.classList.add('hidden');
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('pwa-install-btn')?.classList.add('hidden');
+  showToast('KothaVerse সফলভাবে ইনস্টল হয়েছে!', 'success');
+});
   </script>
 </body>
 </html>
