@@ -46,3 +46,17 @@ self.addEventListener('notificationclick', (e) => {
     })
   );
 });
+
+// Background Push Event (App bondho thakleo kaj korbe)
+self.addEventListener('push', (e) => {
+  const data = e.data ? e.data.json() : { title: 'KothaVerse', body: 'নতুন আপডেট এসেছে!' };
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: './20261121_192551.png',
+      badge: './20261121_192551.png',
+      vibrate: [200, 100, 200],
+      data: { url: data.url || './index.html' }
+    })
+  );
+});
