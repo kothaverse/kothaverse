@@ -1202,36 +1202,29 @@ async function adminSavePopup(e) {
     }
 
     async function loadAllPublicContent() {
-      try {
-        const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes] = await Promise.all([
-          sb.from('categories').select('*').order('sort_order', { ascending: true }),
-          sb.from('poems').select('*').order('created_at', { ascending: false }),
-          sb.from('audio_stories').select('*').order('created_at', { ascending: false }),
-          sb.from('recitations').select('*').order('created_at', { ascending: false }),
-          sb.from('youtube_videos').select('*').order('published_at', { ascending: false }),
-          sb.from('daily_quotes').select('*').order('scheduled_date', { ascending: false }).limit(20),
-          sb.from('community_posts').select('*, profiles(full_name, username, avatar_url)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
-        ]);
+  try {
+    const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes] = await Promise.all([
+      sb.from('categories').select('*').order('sort_order', { ascending: true }),
+      sb.from('poems').select('*').order('created_at', { ascending: false }),
+      sb.from('audio_stories').select('*').order('created_at', { ascending: false }),
+      sb.from('recitations').select('*').order('created_at', { ascending: false }),
+      sb.from('youtube_videos').select('*').order('published_at', { ascending: false }),
+      sb.from('daily_quotes').select('*').order('scheduled_date', { ascending: false }).limit(20),
+      sb.from('community_posts').select('*, profiles(full_name, username, avatar_url)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
+    ]);
 
-        state.categories = (catRes.data && catRes.data.length) ? catRes.data : DEMO_DATA.categories;
-        state.poems = (poemRes.data && poemRes.data.length) ? poemRes.data : DEMO_DATA.poems;
-        state.audioStories = (storyRes.data && storyRes.data.length) ? storyRes.data : DEMO_DATA.audio_stories;
-        state.recitations = (recRes.data && recRes.data.length) ? recRes.data : DEMO_DATA.recitations;
-        state.youtubeVideos = (ytRes.data && ytRes.data.length) ? ytRes.data : DEMO_DATA.youtube_videos;
-        state.dailyQuotes = (quoteRes.data && quoteRes.data.length) ? quoteRes.data : DEMO_DATA.daily_quotes;
-        state.dailyQuote = state.dailyQuotes[0];
-        state.communityPosts = (postRes.data && postRes.data.length) ? postRes.data : DEMO_DATA.community_posts;
-      } catch (err) {
-        state.categories = DEMO_DATA.categories;
-        state.poems = DEMO_DATA.poems;
-        state.audioStories = DEMO_DATA.audio_stories;
-        state.recitations = DEMO_DATA.recitations;
-        state.youtubeVideos = DEMO_DATA.youtube_videos;
-        state.dailyQuotes = DEMO_DATA.daily_quotes;
-        state.dailyQuote = DEMO_DATA.daily_quotes[0];
-        state.communityPosts = DEMO_DATA.community_posts;
-      }
-    }
+    state.categories = !catRes.error && Array.isArray(catRes.data) ? catRes.data : DEMO_DATA.categories;
+    state.poems = !poemRes.error && Array.isArray(poemRes.data) ? poemRes.data : DEMO_DATA.poems;
+    state.audioStories = !storyRes.error && Array.isArray(storyRes.data) ? storyRes.data : DEMO_DATA.audio_stories;
+    state.recitations = !recRes.error && Array.isArray(recRes.data) ? recRes.data : DEMO_DATA.recitations;
+    state.youtubeVideos = !ytRes.error && Array.isArray(ytRes.data) ? ytRes.data : DEMO_DATA.youtube_videos;
+    state.dailyQuotes = !quoteRes.error && Array.isArray(quoteRes.data) && quoteRes.data.length ? quoteRes.data : DEMO_DATA.daily_quotes;
+    state.dailyQuote = state.dailyQuotes[0];
+    state.communityPosts = !postRes.error && Array.isArray(postRes.data) ? postRes.data : DEMO_DATA.community_posts;
+  } catch (err) {
+    console.error('loadAllPublicContent failed:', err);
+  }
+}
 
     function renderAuthControls() {
       const area = document.getElementById('nav-auth-area');
@@ -3900,5 +3893,75 @@ async function installPWA() {
 window.addEventListener('appinstalled', () => {
   document.getElementById('pwa-install-btn')?.classList.add('hidden');
   showToast('KothaVerse সফলভাবে ইনস্টল হয়েছে!', 'success');
+});
+
+let isSyncingPosts = false;
+let lastPublicSnapshot = '';
+
+function getPublicDataSnapshot() {
+  return JSON.stringify({
+    poems: (state.poems || []).map(x => [x.id, x.title, x.updated_at, x.views]),
+    audioStories: (state.audioStories || []).map(x => [x.id, x.title, x.updated_at, x.views]),
+    recitations: (state.recitations || []).map(x => [x.id, x.title, x.updated_at, x.views]),
+    youtubeVideos: (state.youtubeVideos || []).map(x => [x.id, x.title, x.published_at]),
+    communityPosts: (state.communityPosts || []).map(x => [x.id, x.content, x.created_at, x.is_pinned]),
+    categories: (state.categories || []).map(x => [x.id, x.name, x.sort_order]),
+    dailyQuoteId: state.dailyQuote?.id
+  });
+}
+
+function isYouTubeRouteOrPlaying() {
+  if (state.route === 'youtube') return true;
+  const iframes = Array.from(document.querySelectorAll('#app-root iframe'));
+  return iframes.some(f => {
+    const src = f.getAttribute('src') || '';
+    return src.includes('youtube.com') || src.includes('youtu.be');
+  });
+}
+
+async function syncPostsFreshly({ forceRender = false } = {}) {
+  if (isSyncingPosts) return;
+  isSyncingPosts = true;
+
+  try {
+    if (!lastPublicSnapshot) {
+      lastPublicSnapshot = getPublicDataSnapshot();
+    }
+
+    if (typeof loadAllPublicContent === 'function') {
+      await loadAllPublicContent();
+    }
+
+    const nextSnapshot = getPublicDataSnapshot();
+    const hasDataChanged = nextSnapshot !== lastPublicSnapshot;
+    lastPublicSnapshot = nextSnapshot;
+
+    if (state.route === 'admin' && typeof loadAdminTabData === 'function') {
+      await loadAdminTabData();
+    }
+
+    if ((forceRender || hasDataChanged) && !isYouTubeRouteOrPlaying()) {
+      renderCurrentRoute();
+    }
+  } catch (err) {
+    console.error('Post sync error:', err);
+  } finally {
+    isSyncingPosts = false;
+  }
+}
+
+window.refreshKothaVerseData = (opts) => syncPostsFreshly({ forceRender: true, ...opts });
+
+setInterval(() => {
+  const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+  if (!document.hidden && !isTyping) {
+    syncPostsFreshly({ forceRender: false });
+  }
+}, 5000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    syncPostsFreshly({ forceRender: false });
+  }
 });
   
