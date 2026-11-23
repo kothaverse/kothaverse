@@ -3795,41 +3795,25 @@ function toggleTheme() {
   localStorage.setItem('kv_theme', next);
   applyTheme(next);
 }
-    let isSyncingPosts = false;
-
-// Tomar file-e je nam-e data load function ache, setake age priority-te rakho
-const CANDIDATE_LOADERS = [
-  'loadPosts',
-  'fetchPosts',
-  'loadPoems',
-  'fetchPoems',
-  'loadStories',
-  'fetchStories',
-  'loadContent',
-  'loadData',
-  'renderPosts',
-  'renderAll'
-];
-
-function getPostLoader() {
-  if (typeof window.__KOTHAVERSE_LOADER__ === 'function') {
-    return window.__KOTHAVERSE_LOADER__;
-  }
-  for (const fnName of CANDIDATE_LOADERS) {
-    if (typeof window[fnName] === 'function') {
-      return window[fnName];
-    }
-  }
-  return null;
-}
+let isSyncingPosts = false;
 
 async function syncPostsFreshly() {
-  const loader = getPostLoader();
-  if (!loader || isSyncingPosts) return;
-
+  if (isSyncingPosts) return;
   isSyncingPosts = true;
+
   try {
-    await loader();
+    if (typeof window.loadAllPublicContent === 'function') {
+      await window.loadAllPublicContent();
+    }
+
+    // Admin view/tab khola thakle admin data-o refresh korbe
+    if (typeof window.loadAdminTabData === 'function') {
+      await window.loadAdminTabData();
+    }
+
+    if (typeof window.renderCurrentRoute === 'function') {
+      window.renderCurrentRoute();
+    }
   } catch (err) {
     console.error('Post sync error:', err);
   } finally {
@@ -3837,7 +3821,6 @@ async function syncPostsFreshly() {
   }
 }
 
-// Delete korar por sathe sathe call korar jonno helper
 window.refreshKothaVerseData = syncPostsFreshly;
 
 // Protibare 5 second por por update (tab active thakle, user na likhle, ar audio na cholle)
@@ -3850,7 +3833,7 @@ setInterval(() => {
   }
 }, 5000);
 
-// User jkhon tab-e fire asbe tokhon refresh
+// Tab-e fire asle refresh
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     syncPostsFreshly();
