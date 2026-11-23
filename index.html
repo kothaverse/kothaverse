@@ -4453,19 +4453,55 @@ function openNotificationsModal() {
   openModal('notifications-modal');
 }
 
+const VAPID_PUBLIC_KEY = 'BMAYAfbqf4E2QIYvk3bcnw-N79Pr82Z7HT6tFdYDc_vb9TmJL8iqVH0vvoFsPMqQru3fHHuMcMD2Y0aT_UXdFhw';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
 async function requestNotificationPermission() {
-  if (!('Notification' in window)) return showToast('আপনার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।', 'error');
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    return showToast('আপনার ব্রাউজার Push Notification সাপোর্ট করে না।', 'error');
+  }
   const perm = await Notification.requestPermission();
-  if (perm === 'granted') {
-    showToast('নোটিফিকেশন চালু হয়েছে! নতুন পোস্ট এলেই অ্যালার্ট পাবেন।', 'success');
+  if (perm !== 'granted') return showToast('নোটিফিকেশন অনুমতি দেওয়া হয়নি।', 'info');
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const json = sub.toJSON();
+    await sb.from('push_subscriptions').upsert({
+      user_id: state.user?.id || null,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth
+    }, { onConflict: 'endpoint' });
+
+    showToast('মোবাইল পুশ নোটিফিকেশন চালু হয়েছে!', 'success');
     openNotificationsModal();
-  } else {
-    showToast('নোটিফিকেশন অনুমতি দেওয়া হয়নি।', 'info');
+  } catch (err) {
+    showToast('সাবস্ক্রাইব ত্রুটি: ' + err.message, 'error');
   }
 }
 
 async function sendPostNotification(title, message, route) {
+  // 1. In-app notification table-e save
   await sb.from('notifications').insert({ title, message, route });
+  // 2. Background Mobile Push trigger (Edge Function)
+  try {
+    await sb.functions.invoke('send-push', {
+      body: { title, message, url: './index.html' }
+    });
+  } catch (e) { /* Silent */ }
 }
     function applyTheme(theme) {
   const html = document.documentElement;
