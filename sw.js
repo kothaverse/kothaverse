@@ -24,12 +24,16 @@ self.addEventListener('activate', (e) => {
 
 // Network-first strategy (Supabase live data sobsomoy fresh thakbe, offline hole cache dekhabe)
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  // Ignore non-GET requests and browser extension URLs
+  if (e.request.method !== 'GET' || !e.request.url.startsWith('http')) return;
+
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        const clone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        if (res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
         return res;
       })
       .catch(() => caches.match(e.request))
