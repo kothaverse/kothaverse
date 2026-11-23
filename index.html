@@ -257,6 +257,33 @@ html.light .glass-panel {
     0 14px 34px -12px rgba(53, 35, 67, 0.16),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.85) !important;
 }
+    /* Side-er blacky / dark glow & gradient fix in Light Mode */
+html.light .ambient-orb-1 {
+  background: rgba(126, 75, 184, 0.35) !important;
+  opacity: 0.22 !important;
+}
+html.light .ambient-orb-2 {
+  background: rgba(197, 164, 109, 0.35) !important;
+  opacity: 0.2 !important;
+}
+
+/* Modal backdrop jeno pura kalo na hoye soft frosted hoy */
+html.light .bg-black\/80,
+html.light .bg-black\/75,
+html.light .bg-black\/70,
+html.light .bg-black\/60 {
+  background-color: rgba(36, 20, 51, 0.28) !important;
+}
+
+/* Gradient fade-gulote dark midnight-er bodole soft white/purple */
+html.light .from-midnight,
+html.light .via-midnight\/30,
+html.light .via-midnight\/60,
+html.light .to-midnight {
+  --tw-gradient-from: rgba(250, 248, 252, 0.92) !important;
+  --tw-gradient-via: rgba(250, 248, 252, 0.35) !important;
+  --tw-gradient-to: transparent !important;
+}
 
     /* ==================== SPECIAL DAY POPUP ANIMATIONS ==================== */
 @keyframes specialPopupEnter {
