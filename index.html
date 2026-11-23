@@ -258,6 +258,56 @@ html.light .glass-panel {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.85) !important;
 }
 
+    /* ==================== SPECIAL DAY POPUP ANIMATIONS ==================== */
+@keyframes specialPopupEnter {
+  0%   { opacity: 0; transform: scale(0.88) translateY(24px); filter: blur(6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+@keyframes sparkleFloat {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.45; }
+  50%      { transform: translateY(-10px) scale(1.25); opacity: 1; }
+}
+
+@keyframes borderGlowPulse {
+  0%, 100% { box-shadow: 0 0 24px -4px rgba(197, 164, 109, 0.35), 0 24px 60px -15px rgba(0, 0, 0, 0.75); }
+  50%      { box-shadow: 0 0 38px 0px rgba(197, 164, 109, 0.55), 0 24px 60px -15px rgba(0, 0, 0, 0.85); }
+}
+
+@keyframes btnShine {
+  0%   { left: -100%; }
+  45%  { left: 120%; }
+  100% { left: 120%; }
+}
+
+.special-popup-card {
+  animation: specialPopupEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+             borderGlowPulse 4s ease-in-out infinite 0.6s;
+}
+
+.popup-sparkle {
+  position: absolute;
+  pointer-events: none;
+  color: #C5A46D;
+  animation: sparkleFloat 3.2s ease-in-out infinite;
+}
+
+.btn-shine-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-22deg);
+  animation: btnShine 3.2s ease-in-out infinite;
+}
+
 
   </style>
 </head>
