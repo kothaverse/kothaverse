@@ -3789,113 +3789,6 @@ function toggleTheme() {
   applyTheme(next);
 }
 let isSyncingPosts = false;
-
-function hasActiveYouTubeVideo() {
-  const iframes = Array.from(document.querySelectorAll('iframe'));
-  return iframes.some((frame) => {
-    const src = frame.getAttribute('src') || '';
-    const isYT = src.includes('youtube.com') || src.includes('youtu.be');
-    if (!isYT) return false;
-    // YouTube page-e thakle ba iframe active thakle DOM re-render skip korbe
-    return document.activeElement === frame || frame.offsetParent !== null;
-  });
-}
-
-async function syncPostsFreshly({ forceRender = false } = {}) {
-  if (isSyncingPosts) return;
-  isSyncingPosts = true;
-
-  try {
-    // Shudhu data fresh kore anbe; <audio> player-ke touch korbe na
-    if (typeof window.loadAllPublicContent === 'function') {
-      await window.loadAllPublicContent();
-    }
-
-    if (typeof window.loadAdminTabData === 'function') {
-      await window.loadAdminTabData();
-    }
-
-    // YouTube video cholle ba visible thakle route re-render kore iframe bhangbe na
-    const ytActive = hasActiveYouTubeVideo();
-    if ((forceRender || !ytActive) && typeof window.renderCurrentRoute === 'function') {
-      window.renderCurrentRoute();
-    }
-  } catch (err) {
-    console.error('Post sync error:', err);
-  } finally {
-    isSyncingPosts = false;
-  }
-}
-
-window.refreshKothaVerseData = (opts) => syncPostsFreshly({ forceRender: true, ...opts });
-
-// Gaan/abritti cholleo refresh cholbe; shudhu typing na korle ar tab active thakle
-setInterval(() => {
-  const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-  if (!document.hidden && !isTyping) {
-    syncPostsFreshly({ forceRender: false });
-  }
-}, 1000);
-
-// Tab-e fire asle data refresh
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    syncPostsFreshly({ forceRender: false });
-  }
-});
-
-    async function initApp() {
-      applyTheme(localStorage.getItem('kv_theme') || 'dark');
-      applySiteSettings();
-      audioEngine.init();
-      await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
-      navigate('home');
-      initNotifications();
-      setTimeout(() => checkAndShowSpecialPopup(false), 1200);
-
-
-      sb.auth.onAuthStateChange(async () => {
-        await loadSessionAndProfile();
-      });
-    }
-
-    window.addEventListener('DOMContentLoaded', initApp);
-    // =========================================================================
-// PWA SERVICE WORKER & INSTALL PROMPT
-// =========================================================================
-let deferredPrompt = null;
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
-      console.warn('SW registration failed:', err);
-    });
-  });
-}
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById('pwa-install-btn')?.classList.remove('hidden');
-});
-
-async function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === 'accepted') {
-    showToast('KothaVerse App ইনস্টল হচ্ছে!', 'success');
-  }
-  deferredPrompt = null;
-  document.getElementById('pwa-install-btn')?.classList.add('hidden');
-}
-
-window.addEventListener('appinstalled', () => {
-  document.getElementById('pwa-install-btn')?.classList.add('hidden');
-  showToast('KothaVerse সফলভাবে ইনস্টল হয়েছে!', 'success');
-});
-
-let isSyncingPosts = false;
 let lastPublicSnapshot = '';
 
 function getPublicDataSnapshot() {
@@ -3957,11 +3850,64 @@ setInterval(() => {
   if (!document.hidden && !isTyping) {
     syncPostsFreshly({ forceRender: false });
   }
-}, 5000);
+}, 1000);
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     syncPostsFreshly({ forceRender: false });
   }
 });
+
+    async function initApp() {
+      applyTheme(localStorage.getItem('kv_theme') || 'dark');
+      applySiteSettings();
+      audioEngine.init();
+      await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
+      navigate('home');
+      initNotifications();
+      setTimeout(() => checkAndShowSpecialPopup(false), 1200);
+
+
+      sb.auth.onAuthStateChange(async () => {
+        await loadSessionAndProfile();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+    // =========================================================================
+// PWA SERVICE WORKER & INSTALL PROMPT
+// =========================================================================
+let deferredPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwa-install-btn')?.classList.remove('hidden');
+});
+
+async function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('KothaVerse App ইনস্টল হচ্ছে!', 'success');
+  }
+  deferredPrompt = null;
+  document.getElementById('pwa-install-btn')?.classList.add('hidden');
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('pwa-install-btn')?.classList.add('hidden');
+  showToast('KothaVerse সফলভাবে ইনস্টল হয়েছে!', 'success');
+});
+
+
   
