@@ -4494,14 +4494,12 @@ async function requestNotificationPermission() {
 }
 
 async function sendPostNotification(title, message, route) {
-  // 1. In-app notification table-e save
   await sb.from('notifications').insert({ title, message, route });
-  // 2. Background Mobile Push trigger (Edge Function)
-  try {
-    await sb.functions.invoke('send-push', {
-      body: { title, message, url: './index.html' }
-    });
-  } catch (e) { /* Silent */ }
+  const { data, error } = await sb.functions.invoke('send-push', {
+    body: { title, message, url: './index.html' }
+  });
+  if (error) showToast('Push Error: ' + error.message, 'error');
+  else showToast(`Push sent to ${data?.sent ?? 0} device(s)`, 'info');
 }
     function applyTheme(theme) {
   const html = document.documentElement;
