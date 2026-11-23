@@ -3797,21 +3797,34 @@ function toggleTheme() {
 }
 let isSyncingPosts = false;
 
-async function syncPostsFreshly() {
+function hasActiveYouTubeVideo() {
+  const iframes = Array.from(document.querySelectorAll('iframe'));
+  return iframes.some((frame) => {
+    const src = frame.getAttribute('src') || '';
+    const isYT = src.includes('youtube.com') || src.includes('youtu.be');
+    if (!isYT) return false;
+    // YouTube page-e thakle ba iframe active thakle DOM re-render skip korbe
+    return document.activeElement === frame || frame.offsetParent !== null;
+  });
+}
+
+async function syncPostsFreshly({ forceRender = false } = {}) {
   if (isSyncingPosts) return;
   isSyncingPosts = true;
 
   try {
+    // Shudhu data fresh kore anbe; <audio> player-ke touch korbe na
     if (typeof window.loadAllPublicContent === 'function') {
       await window.loadAllPublicContent();
     }
 
-    // Admin view/tab khola thakle admin data-o refresh korbe
     if (typeof window.loadAdminTabData === 'function') {
       await window.loadAdminTabData();
     }
 
-    if (typeof window.renderCurrentRoute === 'function') {
+    // YouTube video cholle ba visible thakle route re-render kore iframe bhangbe na
+    const ytActive = hasActiveYouTubeVideo();
+    if ((forceRender || !ytActive) && typeof window.renderCurrentRoute === 'function') {
       window.renderCurrentRoute();
     }
   } catch (err) {
@@ -3821,22 +3834,20 @@ async function syncPostsFreshly() {
   }
 }
 
-window.refreshKothaVerseData = syncPostsFreshly;
+window.refreshKothaVerseData = (opts) => syncPostsFreshly({ forceRender: true, ...opts });
 
-// Protibare 5 second por por update (tab active thakle, user na likhle, ar audio na cholle)
+// Gaan/abritti cholleo refresh cholbe; shudhu typing na korle ar tab active thakle
 setInterval(() => {
   const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-  const isAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a => !a.paused);
-
-  if (!document.hidden && !isTyping && !isAudioPlaying) {
-    syncPostsFreshly();
+  if (!document.hidden && !isTyping) {
+    syncPostsFreshly({ forceRender: false });
   }
-}, 5000);
+}, 1000);
 
-// Tab-e fire asle refresh
+// Tab-e fire asle data refresh
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    syncPostsFreshly();
+    syncPostsFreshly({ forceRender: false });
   }
 });
 
