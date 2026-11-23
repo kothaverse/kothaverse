@@ -4480,16 +4480,17 @@ async function requestNotificationPermission() {
       });
     }
     const json = sub.toJSON();
-    await sb.from('push_subscriptions').upsert({
-      user_id: state.user?.id || null,
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth
-    }, { onConflict: 'endpoint' });
+    const { error } = await sb.rpc('save_push_subscription', {
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth
+    });
+    if (error) throw error;
 
     showToast('মোবাইল পুশ নোটিফিকেশন চালু হয়েছে!', 'success');
     openNotificationsModal();
   } catch (err) {
+    console.error('Push subscribe error:', err);
     showToast('সাবস্ক্রাইব ত্রুটি: ' + err.message, 'error');
   }
 }
