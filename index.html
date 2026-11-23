@@ -884,6 +884,15 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    function extractYouTubeId(input) {
+  const str = String(input || '').trim();
+  const match = str.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : str;
+}
+
+    
+
+
     function isUUID(val) {
       return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
     }
@@ -2024,7 +2033,7 @@
                 ${latestVideos.map((v) => `
                   <div class="glass-panel rounded-2xl overflow-hidden hover:border-antiqueGold/50 transition flex flex-col">
                     <div class="aspect-video bg-black">
-                      <iframe class="w-full h-full" src="https://www.youtube.com/embed/${escapeHtml(v.youtube_video_id)}" title="${escapeHtml(v.title)}" frameborder="0" allowfullscreen loading="lazy"></iframe>
+                      <iframe class="w-full h-full" src="https://www.youtube.com/embed/${escapeHtml(extractYouTubeId(v.youtube_video_id))}" title="${escapeHtml(v.title)}" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
                     </div>
                     <div class="p-4 flex-1 flex flex-col justify-between">
                       <div>
@@ -2452,7 +2461,7 @@
           ${featured ? `
             <div class="glass-panel rounded-3xl overflow-hidden border border-antiqueGold/30 mb-10 grid grid-cols-1 lg:grid-cols-3">
               <div class="lg:col-span-2 aspect-video bg-black">
-                <iframe class="w-full h-full" src="https://www.youtube.com/embed/${escapeHtml(featured.youtube_video_id)}" title="${escapeHtml(featured.title)}" frameborder="0" allowfullscreen></iframe>
+                <iframe class="w-full h-full" src="https://www.youtube.com/embed/${escapeHtml(extractYouTubeId(featured.youtube_video_id))}" title="${escapeHtml(featured.title)}" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
               </div>
               <div class="p-6 flex flex-col justify-between">
                 <div>
@@ -3728,7 +3737,7 @@
       e.preventDefault();
       const { error } = await sb.from('youtube_videos').insert({
         title: document.getElementById('ay-title').value.trim(),
-        youtube_video_id: document.getElementById('ay-vid').value.trim(),
+        youtube_video_id: extractYouTubeId(document.getElementById('ay-vid').value),
         playlist_type: document.getElementById('ay-type').value,
         is_featured: document.getElementById('ay-featured').checked,
         description: document.getElementById('ay-desc').value.trim(),
