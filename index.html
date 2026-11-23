@@ -4381,9 +4381,12 @@ async function openPoetProfile(name) {
 
 async function toggleFollowPoet(poetName, currentlyFollowing) {
   if (!state.user) {
-    showToast('ফলো করতে আগে লগইন করুন।', 'info');
-    return openAuthModal('login');
-  }
+        area.innerHTML = `
+          <button onclick="openAuthModal('login')" title="লগইন / সাইনআপ" class="p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition" aria-label="Login or Sign up">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
   if (currentlyFollowing) {
     await sb.from('poet_follows').delete().eq('user_id', state.user.id).eq('poet_name', poetName);
     showToast(`${poetName}-কে Unfollow করা হয়েছে।`, 'info');
