@@ -4687,6 +4687,34 @@ function toggleTheme() {
   localStorage.setItem('kv_theme', next);
   applyTheme(next);
 }
+    let isSyncingPosts = false;
+
+async function syncPostsFreshly() {
+  if (isSyncingPosts || typeof loadPosts !== 'function') return;
+  isSyncingPosts = true;
+  try {
+    await loadPosts();
+  } catch (err) {
+    console.error('Post sync error:', err);
+  } finally {
+    isSyncingPosts = false;
+  }
+}
+
+// Protibare 5 second por por update (tab active thakle ar user na likhle)
+setInterval(() => {
+  const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+  if (!document.hidden && !isTyping) {
+    syncPostsFreshly();
+  }
+}, 5000);
+
+// User jkhon tab-e fire asbe tokhon sathe sathe refresh
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    syncPostsFreshly();
+  }
+});
 
     async function initApp() {
       applyTheme(localStorage.getItem('kv_theme') || 'dark');
