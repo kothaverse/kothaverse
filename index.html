@@ -1970,8 +1970,9 @@ async function adminSavePopup(e) {
 
       if (!state.user) {
         area.innerHTML = `
-          <button onclick="openAuthModal('login')" class="px-3 py-1.5 rounded-xl border border-antiqueGold/35 text-xs sm:text-sm font-bengali text-ivory hover:bg-deepPurple/60 transition">লগইন</button>
-          <button onclick="openAuthModal('signup')" class="px-3 py-1.5 rounded-xl bg-antiqueGold text-midnight text-xs sm:text-sm font-bengali font-semibold hover:opacity-90 transition shadow-gold">সাইনআপ</button>
+          <button onclick="openAuthModal('login')" title="লগইন / সাইনআপ" class="p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition" aria-label="Login or Sign up">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </button>
         `;
       } else {
         const displayName = state.profile?.full_name || state.user.email.split('@')[0];
