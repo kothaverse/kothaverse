@@ -304,7 +304,24 @@ html.light span[class*="rounded-full"][class*="bg-deepPurple"] *,
 html.light span[class*="rounded-full"][class*="text-antiqueGold"] * {
   color: #FFFFFF !important;
 }
+/* Special Popup & All Badges in Light Mode: Dark background + Pure White text */
+html.light .special-popup-card .rounded-full,
+html.light .special-popup-card .rounded-full span,
+html.light .special-popup-card [class*="rounded-full"],
+html.light .special-popup-card [class*="rounded-full"] span,
+html.light [class*="badge"],
+html.light [class*="badge"] * {
+  background-color: #352343 !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  border-color: rgba(53, 35, 67, 0.5) !important;
+}
 
+/* ব্যাজের ভেতরের ছোট pulsing dot-টাকে সোনালি বা হালকা রঙেই রাখুন */
+html.light .special-popup-card .rounded-full .animate-ping,
+html.light .special-popup-card .rounded-full span.w-1\.5 {
+  background-color: #F3D999 !important;
+}
     /* ==================== SPECIAL DAY POPUP ANIMATIONS ==================== */
 @keyframes specialPopupEnter {
   0%   { opacity: 0; transform: scale(0.88) translateY(24px); filter: blur(6px); }
