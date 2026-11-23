@@ -126,6 +126,104 @@
         font-family: 'Noto Serif Bengali', serif !important;
       }
     }
+    /* ==================== LIGHT MODE (White + Dark Purple Glassmorphism) ==================== */
+html.light body {
+  background-color: #FAF8FC !important;
+  color: #241433 !important;
+}
+html.light .glass-panel {
+  background: rgba(53, 35, 67, 0.07) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(53, 35, 67, 0.2) !important;
+  box-shadow: 0 12px 32px -12px rgba(53, 35, 67, 0.16) !important;
+}
+html.light .glass-nav {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(53, 35, 67, 0.15) !important;
+}
+html.light .hero-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(53, 35, 67, 0.16) 0%, rgba(197, 164, 109, 0.14) 45%, rgba(250, 248, 252, 0) 75%) !important;
+}
+html.light .gold-gradient-text {
+  background: linear-gradient(135deg, #241433 0%, #4E2F69 55%, #8F6B2D 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Backgrounds & Modals in Light Mode */
+html.light .bg-midnight,
+html.light .bg-midnight\/95,
+html.light .bg-midnight\/80,
+html.light .bg-midnight\/70,
+html.light .bg-midnight\/65,
+html.light .bg-midnight\/60,
+html.light .bg-midnight\/55,
+html.light .bg-midnight\/50 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+html.light .bg-deepPurple\/40,
+html.light .bg-deepPurple\/50,
+html.light .bg-deepPurple\/60,
+html.light .bg-deepPurple\/70,
+html.light .bg-deepPurple\/80,
+html.light .bg-deepPurple\/30,
+html.light .bg-deepPurple\/35 {
+  background-color: rgba(53, 35, 67, 0.1) !important;
+}
+
+/* Text Readability in Light Mode */
+html.light .text-ivory,
+html.light .text-ivory\/95,
+html.light .text-ivory\/90,
+html.light .text-ivory\/85,
+html.light .text-ivory\/80 {
+  color: #241433 !important;
+}
+html.light .text-ivory\/75,
+html.light .text-ivory\/70,
+html.light .text-ivory\/65,
+html.light .text-ivory\/60 {
+  color: rgba(36, 20, 51, 0.72) !important;
+}
+html.light .text-ivory\/50,
+html.light .text-ivory\/45,
+html.light .text-ivory\/40 {
+  color: rgba(36, 20, 51, 0.55) !important;
+}
+html.light .text-antiqueGold,
+html.light .text-antiqueGold\/90,
+html.light .text-antiqueGold\/80 {
+  color: #4A2B63 !important;
+}
+
+/* Gold Buttons keep crisp contrast */
+html.light .bg-antiqueGold {
+  background-color: #352343 !important;
+  color: #FFFFFF !important;
+}
+html.light .bg-antiqueGold * {
+  color: #FFFFFF !important;
+}
+
+/* Inputs, Selects & Textareas */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  color: #241433 !important;
+  border-color: rgba(53, 35, 67, 0.25) !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: rgba(36, 20, 51, 0.45) !important;
+}
+
+/* Scrollbar */
+html.light ::-webkit-scrollbar-track { background: #F3EEF8; }
+html.light ::-webkit-scrollbar-thumb { background: rgba(53, 35, 67, 0.35); }
+html.light ::-webkit-scrollbar-thumb:hover { background: #352343; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col bg-midnight text-ivory selection:bg-antiqueGold/30 selection:text-ivory">
@@ -174,6 +272,9 @@
           <i data-lucide="search" class="w-4 h-4"></i>
           <span class="hidden lg:inline text-[11px] text-ivory/50 font-mono">Ctrl+K</span>
         </button>
+        <button onclick="toggleTheme()" id="theme-toggle-btn" title="Dark / Light Mode" class="p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition">
+  <i id="theme-toggle-icon" data-lucide="sun" class="w-4 h-4"></i>
+</button>
 
         <button onclick="openModal('ambient-modal')" id="ambient-nav-btn" title="Sleep & Relax Ambient Sounds" class="p-2 rounded-xl border border-antiqueGold/25 bg-deepPurple/40 text-ivory/85 hover:text-antiqueGold hover:border-antiqueGold transition">
           <i data-lucide="cloud-rain" class="w-4 h-4"></i>
@@ -4331,8 +4432,30 @@ async function requestNotificationPermission() {
 async function sendPostNotification(title, message, route) {
   await sb.from('notifications').insert({ title, message, route });
 }
+    function applyTheme(theme) {
+  const html = document.documentElement;
+  const isLight = theme === 'light';
+  html.classList.toggle('light', isLight);
+  html.classList.toggle('dark', !isLight);
+
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute('content', isLight ? '#FAF8FC' : '#17121F');
+
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    btn.innerHTML = `<i data-lucide="${isLight ? 'moon' : 'sun'}" class="w-4 h-4"></i>`;
+    lucide.createIcons();
+  }
+}
+
+function toggleTheme() {
+  const next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem('kv_theme', next);
+  applyTheme(next);
+}
 
     async function initApp() {
+      applyTheme(localStorage.getItem('kv_theme') || 'dark');
       applySiteSettings();
       audioEngine.init();
       await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
