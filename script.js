@@ -384,8 +384,9 @@ async function adminSavePopup(e) {
       } catch (e) { return defaults; }
     }
 
-    function saveSiteSettings(obj) {
+    async function saveSiteSettings(obj) {
       localStorage.setItem('kv_site_settings', JSON.stringify(obj));
+      await syncSettingsToSupabase();
       applySiteSettings();
     }
 
@@ -1222,7 +1223,7 @@ async function adminSavePopup(e) {
 
     async function loadAllPublicContent() {
       try {
-        const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes, ebookRes, storeSetRes] = await Promise.all([
+        const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes, ebookRes, storeSetRes, siteSetRes] = await Promise.all([
           sb.from('categories').select('*').order('sort_order', { ascending: true }),
           sb.from('poems').select('*').order('created_at', { ascending: false }),
           sb.from('audio_stories').select('*').order('created_at', { ascending: false }),
@@ -1231,8 +1232,10 @@ async function adminSavePopup(e) {
           sb.from('daily_quotes').select('*').order('scheduled_date', { ascending: false }).limit(20),
           sb.from('community_posts').select('*, profiles(full_name, username, avatar_url)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
           sb.from('ebooks').select('*').eq('is_published', true).order('created_at', { ascending: false }),
-          sb.from('store_settings').select('*').eq('id', 1).maybeSingle()
+          sb.from('store_settings').select('*').eq('id', 1).maybeSingle(),
+          sb.from('site_settings').select('settings').eq('id', 1).maybeSingle()
         ]);
+        
 
         state.categories = !catRes.error && Array.isArray(catRes.data) ? catRes.data : DEMO_DATA.categories;
         state.poems = !poemRes.error && Array.isArray(poemRes.data) ? poemRes.data : DEMO_DATA.poems;
@@ -1245,6 +1248,9 @@ async function adminSavePopup(e) {
         state.ebooks = !ebookRes.error && Array.isArray(ebookRes.data) ? ebookRes.data : [];
         if (!storeSetRes.error && storeSetRes.data) {
           state.storeSettings = { ...state.storeSettings, ...storeSetRes.data };
+        }
+        if (!siteSetRes.error && siteSetRes.data?.settings) {
+          applyRemoteSettingsToLocal(siteSetRes.data.settings);
         }
       } catch (err) {
         console.error('loadAllPublicContent failed:', err);
@@ -4817,6 +4823,64 @@ async function adminDeliverVoiceOrder(orderId, audioFile, waNum, senderName) {
     }
   } catch (err) {
     showToast('ডেলিভারি ব্যর্থ: ' + err.message, 'error');
+  }
+}
+// =========================================================================
+// GLOBAL SITE SETTINGS SYNC (Supabase <-> localStorage)
+// =========================================================================
+function applyRemoteSettingsToLocal(remoteSettings) {
+  if (!remoteSettings || typeof remoteSettings !== 'object') return;
+
+  Object.entries(remoteSettings).forEach(([key, remoteVal]) => {
+    if (!remoteVal || typeof remoteVal !== 'object') return;
+    try {
+      const localExisting = JSON.parse(localStorage.getItem(key) || '{}');
+      const merged = { ...remoteVal };
+
+      // Admin-er local Gemini API Key jate overwrite na hoy
+      if (localExisting.geminiApiKey) merged.geminiApiKey = localExisting.geminiApiKey;
+      if (localExisting.apiKey) merged.apiKey = localExisting.apiKey;
+      if (localExisting.gemini_api_key) merged.gemini_api_key = localExisting.gemini_api_key;
+
+      localStorage.setItem(key, JSON.stringify(merged));
+    } catch (e) { /* ignore parse error */ }
+  });
+
+  if (typeof applyWebsiteSettings === 'function') {
+    applyWebsiteSettings();
+  }
+}
+
+async function syncSettingsToSupabase() {
+  if (state.profile?.role !== 'admin') return;
+
+  const allSettings = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    // Supabase auth token ba session key skip korbe
+    if (!k || k.startsWith('sb-') || k.includes('auth') || k.includes('token')) continue;
+
+    try {
+      const parsed = JSON.parse(localStorage.getItem(k));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const cleanCopy = { ...parsed };
+        // Security: API key kokhono public database-e jabe na
+        delete cleanCopy.geminiApiKey;
+        delete cleanCopy.apiKey;
+        delete cleanCopy.gemini_api_key;
+        allSettings[k] = cleanCopy;
+      }
+    } catch (e) { /* non-JSON item skip */ }
+  }
+
+  const { error } = await sb.from('site_settings').upsert({
+    id: 1,
+    settings: allSettings,
+    updated_at: new Date().toISOString()
+  });
+
+  if (error) {
+    showToast('Global settings sync ব্যর্থ: ' + error.message, 'error');
   }
 }
 
