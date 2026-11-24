@@ -1434,6 +1434,45 @@ async function adminSavePopup(e) {
       }
       lucide.createIcons();
     }
+function navigateToRoute(route, { replace = false } = {}) {
+  const cleanRoute = route || 'home';
+  state.route = cleanRoute;
+
+  const targetHash = `#${cleanRoute}`;
+  if (window.location.hash !== targetHash) {
+    if (replace) {
+      window.history.replaceState({ route: cleanRoute }, '', targetHash);
+    } else {
+      window.history.pushState({ route: cleanRoute }, '', targetHash);
+    }
+  }
+
+  renderCurrentRoute();
+}
+
+function syncRouteFromHash() {
+  const hashRoute = (window.location.hash || '').replace(/^#/, '').trim();
+  const nextRoute = hashRoute || 'home';
+  if (state.route !== nextRoute) {
+    state.route = nextRoute;
+    renderCurrentRoute();
+  }
+}
+
+// Browser / mobile Back & Forward button handle korbe
+window.addEventListener('popstate', () => {
+  syncRouteFromHash();
+});
+
+window.addEventListener('hashchange', () => {
+  syncRouteFromHash();
+});
+
+// Page first load hole hash onujayi route set korbe
+document.addEventListener('DOMContentLoaded', () => {
+  const initialRoute = (window.location.hash || '').replace(/^#/, '').trim() || state.route || 'home';
+  navigateToRoute(initialRoute, { replace: true });
+});
 
     // =========================================================================
     // 12. PAGE RENDERERS
