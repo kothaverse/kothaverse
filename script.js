@@ -4826,51 +4826,78 @@ async function adminDeliverVoiceOrder(orderId, audioFile, waNum, senderName) {
   }
 }
 // =========================================================================
-// GLOBAL SITE SETTINGS SYNC (Supabase <-> localStorage)
+// GLOBAL SITE SETTINGS AUTO-SYNC (Supabase <-> localStorage)
 // =========================================================================
+const _origLocalSetItem = localStorage.setItem.bind(localStorage);
+let _isApplyingRemoteSettings = false;
+let _settingsSyncTimer = null;
+
+localStorage.setItem = function (key, value) {
+  _origLocalSetItem(key, value);
+  if (
+    !_isApplyingRemoteSettings &&
+    typeof state !== 'undefined' &&
+    state.profile?.role === 'admin' &&
+    key &&
+    !key.startsWith('sb-') &&
+    !key.includes('auth') &&
+    !key.includes('token')
+  ) {
+    clearTimeout(_settingsSyncTimer);
+    _settingsSyncTimer = setTimeout(() => {
+      syncSettingsToSupabase(true);
+    }, 400);
+  }
+};
+
 function applyRemoteSettingsToLocal(remoteSettings) {
   if (!remoteSettings || typeof remoteSettings !== 'object') return;
 
-  Object.entries(remoteSettings).forEach(([key, remoteVal]) => {
-    if (!remoteVal || typeof remoteVal !== 'object') return;
-    try {
-      const localExisting = JSON.parse(localStorage.getItem(key) || '{}');
-      const merged = { ...remoteVal };
+  _isApplyingRemoteSettings = true;
+  try {
+    Object.entries(remoteSettings).forEach(([key, remoteVal]) => {
+      if (!remoteVal || typeof remoteVal !== 'object') return;
+      try {
+        const localExisting = JSON.parse(localStorage.getItem(key) || '{}');
+        const merged = { ...remoteVal };
 
-      // Admin-er local Gemini API Key jate overwrite na hoy
-      if (localExisting.geminiApiKey) merged.geminiApiKey = localExisting.geminiApiKey;
-      if (localExisting.apiKey) merged.apiKey = localExisting.apiKey;
-      if (localExisting.gemini_api_key) merged.gemini_api_key = localExisting.gemini_api_key;
+        // Admin-er local Gemini API Key jate overwrite na hoy
+        if (localExisting.geminiApiKey) merged.geminiApiKey = localExisting.geminiApiKey;
+        if (localExisting.apiKey) merged.apiKey = localExisting.apiKey;
+        if (localExisting.gemini_api_key) merged.gemini_api_key = localExisting.gemini_api_key;
 
-      localStorage.setItem(key, JSON.stringify(merged));
-    } catch (e) { /* ignore parse error */ }
-  });
-
-  if (typeof applyWebsiteSettings === 'function') {
-    applyWebsiteSettings();
+        _origLocalSetItem(key, JSON.stringify(merged));
+      } catch (e) { /* ignore */ }
+    });
+  } finally {
+    _isApplyingRemoteSettings = false;
   }
+
+  // UI sathe sathe refresh kora jate Incognito-te first load-ei dekha jay
+  if (typeof applyWebsiteSettings === 'function') applyWebsiteSettings();
+  if (typeof renderNavbar === 'function') renderNavbar();
+  if (typeof renderFooter === 'function') renderFooter();
+  if (typeof renderCurrentRoute === 'function' && state.route !== 'admin') renderCurrentRoute();
 }
 
-async function syncSettingsToSupabase() {
+async function syncSettingsToSupabase(showSuccess = false) {
   if (state.profile?.role !== 'admin') return;
 
   const allSettings = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    // Supabase auth token ba session key skip korbe
     if (!k || k.startsWith('sb-') || k.includes('auth') || k.includes('token')) continue;
 
     try {
       const parsed = JSON.parse(localStorage.getItem(k));
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const cleanCopy = { ...parsed };
-        // Security: API key kokhono public database-e jabe na
         delete cleanCopy.geminiApiKey;
         delete cleanCopy.apiKey;
         delete cleanCopy.gemini_api_key;
         allSettings[k] = cleanCopy;
       }
-    } catch (e) { /* non-JSON item skip */ }
+    } catch (e) { /* non-JSON skip */ }
   }
 
   const { error } = await sb.from('site_settings').upsert({
@@ -4881,6 +4908,8 @@ async function syncSettingsToSupabase() {
 
   if (error) {
     showToast('Global settings sync ব্যর্থ: ' + error.message, 'error');
+  } else if (showSuccess) {
+    showToast('Settings সব ইউজারের জন্য আপডেট হয়েছে!', 'success');
   }
 }
 
