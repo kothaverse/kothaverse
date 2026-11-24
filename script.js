@@ -161,6 +161,21 @@
       aiCopilotLog: [],
       authMode: 'login',
       activePoem: null,
+      ebooks: [],
+      myEbookOrders: [],
+      myVoiceOrders: [],
+      storeTab: 'ebooks',
+      storeSettings: {
+        upi_id: 'kothaverse@upi',
+        upi_name: 'KothaVerse',
+        qr_image_url: '',
+        voice_pkg_1_name: 'Mini Voice Note (১ মিনিট)',
+        voice_pkg_1_price: 99,
+        voice_pkg_2_name: 'Standard Dedication (২-৩ মিনিট)',
+        voice_pkg_2_price: 149,
+        voice_pkg_3_name: 'Premium Cinematic Gift (কবিতা + মেসেজ)',
+        voice_pkg_3_price: 249
+      },
     };
 
     const I18N = {
@@ -1193,38 +1208,48 @@ async function adminSavePopup(e) {
 
     async function loadUserPersonalData() {
       if (!state.user) return;
-      const [libRes, histRes] = await Promise.all([
+      const [libRes, histRes, ebOrdRes, vcOrdRes] = await Promise.all([
         sb.from('user_library').select('*').eq('user_id', state.user.id),
-        sb.from('listening_history').select('*').eq('user_id', state.user.id).order('last_played_at', { ascending: false })
+        sb.from('listening_history').select('*').eq('user_id', state.user.id).order('last_played_at', { ascending: false }),
+        sb.from('ebook_orders').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }),
+        sb.from('voice_dedication_orders').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false })
       ]);
       state.library = libRes.data || [];
       state.history = histRes.data || [];
+      state.myEbookOrders = ebOrdRes.data || [];
+      state.myVoiceOrders = vcOrdRes.data || [];
     }
 
     async function loadAllPublicContent() {
-  try {
-    const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes] = await Promise.all([
-      sb.from('categories').select('*').order('sort_order', { ascending: true }),
-      sb.from('poems').select('*').order('created_at', { ascending: false }),
-      sb.from('audio_stories').select('*').order('created_at', { ascending: false }),
-      sb.from('recitations').select('*').order('created_at', { ascending: false }),
-      sb.from('youtube_videos').select('*').order('published_at', { ascending: false }),
-      sb.from('daily_quotes').select('*').order('scheduled_date', { ascending: false }).limit(20),
-      sb.from('community_posts').select('*, profiles(full_name, username, avatar_url)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
-    ]);
+      try {
+        const [catRes, poemRes, storyRes, recRes, ytRes, quoteRes, postRes, ebookRes, storeSetRes] = await Promise.all([
+          sb.from('categories').select('*').order('sort_order', { ascending: true }),
+          sb.from('poems').select('*').order('created_at', { ascending: false }),
+          sb.from('audio_stories').select('*').order('created_at', { ascending: false }),
+          sb.from('recitations').select('*').order('created_at', { ascending: false }),
+          sb.from('youtube_videos').select('*').order('published_at', { ascending: false }),
+          sb.from('daily_quotes').select('*').order('scheduled_date', { ascending: false }).limit(20),
+          sb.from('community_posts').select('*, profiles(full_name, username, avatar_url)').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
+          sb.from('ebooks').select('*').eq('is_published', true).order('created_at', { ascending: false }),
+          sb.from('store_settings').select('*').eq('id', 1).maybeSingle()
+        ]);
 
-    state.categories = !catRes.error && Array.isArray(catRes.data) ? catRes.data : DEMO_DATA.categories;
-    state.poems = !poemRes.error && Array.isArray(poemRes.data) ? poemRes.data : DEMO_DATA.poems;
-    state.audioStories = !storyRes.error && Array.isArray(storyRes.data) ? storyRes.data : DEMO_DATA.audio_stories;
-    state.recitations = !recRes.error && Array.isArray(recRes.data) ? recRes.data : DEMO_DATA.recitations;
-    state.youtubeVideos = !ytRes.error && Array.isArray(ytRes.data) ? ytRes.data : DEMO_DATA.youtube_videos;
-    state.dailyQuotes = !quoteRes.error && Array.isArray(quoteRes.data) && quoteRes.data.length ? quoteRes.data : DEMO_DATA.daily_quotes;
-    state.dailyQuote = state.dailyQuotes[0];
-    state.communityPosts = !postRes.error && Array.isArray(postRes.data) ? postRes.data : DEMO_DATA.community_posts;
-  } catch (err) {
-    console.error('loadAllPublicContent failed:', err);
-  }
-}
+        state.categories = !catRes.error && Array.isArray(catRes.data) ? catRes.data : DEMO_DATA.categories;
+        state.poems = !poemRes.error && Array.isArray(poemRes.data) ? poemRes.data : DEMO_DATA.poems;
+        state.audioStories = !storyRes.error && Array.isArray(storyRes.data) ? storyRes.data : DEMO_DATA.audio_stories;
+        state.recitations = !recRes.error && Array.isArray(recRes.data) ? recRes.data : DEMO_DATA.recitations;
+        state.youtubeVideos = !ytRes.error && Array.isArray(ytRes.data) ? ytRes.data : DEMO_DATA.youtube_videos;
+        state.dailyQuotes = !quoteRes.error && Array.isArray(quoteRes.data) && quoteRes.data.length ? quoteRes.data : DEMO_DATA.daily_quotes;
+        state.dailyQuote = state.dailyQuotes[0];
+        state.communityPosts = !postRes.error && Array.isArray(postRes.data) ? postRes.data : DEMO_DATA.community_posts;
+        state.ebooks = !ebookRes.error && Array.isArray(ebookRes.data) ? ebookRes.data : [];
+        if (!storeSetRes.error && storeSetRes.data) {
+          state.storeSettings = { ...state.storeSettings, ...storeSetRes.data };
+        }
+      } catch (err) {
+        console.error('loadAllPublicContent failed:', err);
+      }
+    }
 
     function renderAuthControls() {
       const area = document.getElementById('nav-auth-area');
@@ -1449,6 +1474,7 @@ function renderCurrentRoute() {
     case 'library': root.innerHTML = renderLibraryPage(); break;
     case 'about': root.innerHTML = renderAboutPage(); break;
     case 'contact': root.innerHTML = renderContactPage(); break;
+    case 'store': root.innerHTML = renderStorePage(); break;
     case 'admin': root.innerHTML = renderAdminShell(); loadAdminTabData(); break;
     default: root.innerHTML = renderHomePage();
   }
@@ -1461,6 +1487,12 @@ function renderCurrentRoute() {
 function syncRouteFromLocation() {
   const hashRoute = (window.location.hash || '').replace(/^#/, '').trim();
   const nextRoute = hashRoute || 'home';
+  const rawHash = (window.location.hash || '').replace(/^#/, '').trim();
+if (rawHash.startsWith('chithi/')) {
+  const code = rawHash.split('/')[1];
+  if (code) openChithiByCode(code);
+  return;
+}
 
   if (nextRoute === 'admin' && state.profile?.role !== 'admin') {
     state.route = 'home';
@@ -1879,6 +1911,14 @@ window.addEventListener('hashchange', () => {
                 </div>
               `).join('') : `<p class="text-xs font-bengali text-ivory/50">এখনো কোনো মন্তব্য নেই। প্রথম মন্তব্যটি আপনিই করুন!</p>`}
             </div>
+            <button onclick="openChithiCreator('${p.id}')" class="px-3.5 py-2 rounded-xl bg-antiqueGold/15 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight transition flex items-center gap-1.5">
+  <i data-lucide="mail-heart" class="w-4 h-4"></i> চিঠি পাঠান
+</button>
+${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user.id)) ? `
+  <button onclick="downloadPoetCertificateCard('${p.id}')" class="px-3.5 py-2 rounded-xl border border-antiqueGold/25 text-ivory/85 hover:text-antiqueGold flex items-center gap-1.5">
+    <i data-lucide="award" class="w-4 h-4"></i> Poet Card (QR)
+  </button>
+` : ''}
           </div>
         </div>
       `;
@@ -2471,6 +2511,7 @@ window.addEventListener('hashchange', () => {
         ['inbox', 'Newsletter & Contact', 'mail'],
         ['users', 'Users & Mail Confirm', 'user-check'],
         ['popup', 'Special Popup', 'bell-ring'],
+        ['store', 'E-Books & Orders', 'shopping-bag'],
         ['settings', 'Website Settings', 'settings']
       ];
 
@@ -2485,11 +2526,18 @@ window.addEventListener('hashchange', () => {
           </div>
 
           <div class="flex flex-wrap gap-2 mb-6">
-            ${tabs.map(([id, label, icon]) => `
-              <button onclick="state.adminTab='${id}'; renderCurrentRoute()" class="px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 border transition ${state.adminTab === id ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/20 text-ivory/80 hover:border-antiqueGold'}">
-                <i data-lucide="${icon}" class="w-3.5 h-3.5"></i> ${label}
-              </button>
-            `).join('')}
+            ${tabs.map(([id, label, icon]) => {
+              const cnt = (window.adminBadges && window.adminBadges[id]) || 0;
+              return `
+                <button onclick="state.adminTab='${id}'; renderCurrentRoute()" class="px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 border transition ${state.adminTab === id ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/20 text-ivory/80 hover:border-antiqueGold'}">
+                  <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+                  <span>${label}</span>
+                  <span id="admin-badge-${id}" class="${cnt > 0 ? 'inline-flex' : 'hidden'} items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-none shadow">
+                    ${cnt > 99 ? '99+' : cnt}
+                  </span>
+                </button>
+              `;
+            }).join('')}
           </div>
 
           <div id="admin-tab-body" class="glass-panel rounded-3xl p-5 sm:p-7 border border-antiqueGold/25">
@@ -2525,8 +2573,48 @@ window.addEventListener('hashchange', () => {
       a.click();
       showToast('Analytics CSV ডাউনলোড হয়েছে!', 'success');
     }
+    window.adminBadges = { moderation: 0, inbox: 0, store: 0, users: 0 };
+
+async function refreshAdminBadges() {
+  if (state.profile?.role !== 'admin') return;
+  try {
+    const [subRes, repRes, nlRes, ebOrdRes, vcOrdRes, usrRes] = await Promise.all([
+      sb.from('user_submissions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      sb.from('content_reports').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+      sb.from('newsletter_subscribers').select('*', { count: 'exact', head: true }).eq('payment_status', 'pending'),
+      sb.from('ebook_orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      sb.from('voice_dedication_orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      sb.rpc('get_admin_users')
+    ]);
+
+    const unconfirmedUsers = (!usrRes.error && Array.isArray(usrRes.data))
+      ? usrRes.data.filter((u) => !u.email_confirmed_at).length
+      : 0;
+
+    window.adminBadges = {
+      moderation: (subRes.count || 0) + (repRes.count || 0),
+      inbox: nlRes.count || 0,
+      store: (ebOrdRes.count || 0) + (vcOrdRes.count || 0),
+      users: unconfirmedUsers
+    };
+
+    Object.entries(window.adminBadges).forEach(([tabId, count]) => {
+      const el = document.getElementById(`admin-badge-${tabId}`);
+      if (!el) return;
+      if (count > 0) {
+        el.textContent = count > 99 ? '99+' : String(count);
+        el.classList.remove('hidden');
+        el.classList.add('inline-flex');
+      } else {
+        el.classList.add('hidden');
+        el.classList.remove('inline-flex');
+      }
+    });
+  } catch (e) { /* Silent */ }
+}
 
     async function loadAdminTabData() {
+      refreshAdminBadges();
       const box = document.getElementById('admin-tab-body');
       if (!box) return;
       const t = state.adminTab;
@@ -2891,6 +2979,11 @@ window.addEventListener('hashchange', () => {
                           <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp মেসেজ পাঠান
                         </button>
                       ` : ''}
+                      ${s.status === 'approved' ? `
+  <button onclick="downloadPoetCardFromSubmission('${s.id}')" class="px-3 py-1.5 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight flex items-center gap-1.5 transition">
+    <i data-lucide="award" class="w-3.5 h-3.5"></i> Poet Card
+  </button>
+` : ''}
                     </div>
                   </div>
                   <p class="font-bengali text-xs text-ivory/75 whitespace-pre-line">${escapeHtml(s.body)}</p>
@@ -3009,6 +3102,13 @@ window.addEventListener('hashchange', () => {
               </div>
             </div>
           `;
+        } else if (t === 'store') {
+          const [ebRes, ebOrdRes, vcOrdRes] = await Promise.all([
+            sb.from('ebooks').select('*').order('created_at', { ascending: false }),
+            sb.from('ebook_orders').select('*, ebooks(title, price_inr)').order('created_at', { ascending: false }),
+            sb.from('voice_dedication_orders').select('*').order('created_at', { ascending: false })
+          ]);
+          box.innerHTML = renderAdminStoreTab(ebRes.data || [], ebOrdRes.data || [], vcOrdRes.data || []);
         } else if (t === 'users') {
           const { data: users, error } = await sb.rpc('get_admin_users');
           if (error) {
@@ -3483,7 +3583,7 @@ async function adminSaveStory(e) {
           body: sub.body,
           category_id: sub.category_id,
           status: 'published',
-          created_by: state.user.id
+          created_by: sub.user_id || state.user.id
         });
         if (pubErr) return showToast('কবিতা প্রকাশে ত্রুটি: ' + pubErr.message, 'error');
         if (sub.whatsapp_number) {
@@ -3962,12 +4062,735 @@ document.addEventListener('visibilitychange', () => {
     syncPostsFreshly({ forceRender: false });
   }
 });
+// =========================================================================
+// 17. DIGITAL CHITHI & PUBLISHED POET DIGITAL CARD (WITH QR CODE)
+// =========================================================================
+function openChithiCreator(poemId) {
+  const p = state.poems.find((x) => x.id === poemId);
+  if (!p) return;
+  document.getElementById('chithi-poem-id').value = p.id;
+  document.getElementById('chithi-sender').value = state.profile?.full_name || '';
+  document.getElementById('chithi-receiver').value = '';
+  document.getElementById('chithi-note').value = '';
+  document.getElementById('chithi-share-box').classList.add('hidden');
+  openModal('chithi-create-modal');
+}
+
+async function handleCreateChithi(e) {
+  e.preventDefault();
+  const poemId = document.getElementById('chithi-poem-id').value;
+  const p = state.poems.find((x) => x.id === poemId);
+  if (!p) return;
+
+  const shortCode = 'kv' + Math.random().toString(36).slice(2, 8);
+  const payload = {
+    short_code: shortCode,
+    sender_name: document.getElementById('chithi-sender').value.trim(),
+    receiver_name: document.getElementById('chithi-receiver').value.trim(),
+    personal_note: document.getElementById('chithi-note').value.trim() || null,
+    poem_title: p.title,
+    poet_name: p.poet_name,
+    poem_body: p.body,
+    audio_url: p.audio_url || null
+  };
+
+  const { error } = await sb.from('digital_chithis').insert(payload);
+  if (error) return showToast('চিঠি তৈরি ব্যর্থ: ' + error.message, 'error');
+
+  const shareUrl = `${window.location.origin}${window.location.pathname}#chithi/${shortCode}`;
+  document.getElementById('chithi-link-output').value = shareUrl;
+  document.getElementById('chithi-share-box').classList.remove('hidden');
+  showToast('ডিজিটাল চিঠির লিংক তৈরি হয়েছে!', 'success');
+}
+
+function shareChithiOnWA() {
+  const url = document.getElementById('chithi-link-output').value;
+  const receiver = document.getElementById('chithi-receiver').value.trim();
+  const msg = `প্রিয় ${receiver},\nতোমার জন্য KothaVerse থেকে একটি বিশেষ কবিতার চিঠি পাঠিয়েছি। খুলে দেখো:\n${url}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+async function openChithiByCode(shortCode) {
+  const { data, error } = await sb.from('digital_chithis').select('*').eq('short_code', shortCode).maybeSingle();
+  if (error || !data) {
+    showToast('এই চিঠিটি খুঁজে পাওয়া যায়নি।', 'error');
+    return;
+  }
+
+  window._activeChithi = data;
+  const box = document.getElementById('chithi-view-body');
+  box.innerHTML = `
+    <div id="chithi-stage-closed" class="flex flex-col items-center text-center space-y-6 font-bengali py-8 fade-in">
+      <span class="px-4 py-1 rounded-full bg-antiqueGold/15 border border-antiqueGold/35 text-xs text-antiqueGold">KothaVerse ডিজিটাল চিঠি</span>
+      <h2 class="text-2xl sm:text-3xl font-bold text-ivory">প্রিয় ${escapeHtml(data.receiver_name)},<br/>তোমার জন্য একটি চিঠি এসেছে</h2>
+      <div id="chithi-env-el" onclick="revealChithiLetter()" class="chithi-envelope mt-2">
+        <div class="chithi-flap"></div>
+        <div class="chithi-seal">✉</div>
+        <div class="absolute bottom-5 inset-x-0 text-center text-xs text-ivory/70">খোলার জন্য এখানে ক্লিক করুন</div>
+      </div>
+      <p class="text-xs text-ivory/55">প্রেরক: ${escapeHtml(data.sender_name)}</p>
+    </div>
+
+    <div id="chithi-stage-open" class="hidden glass-panel rounded-3xl p-6 sm:p-9 border border-antiqueGold/40 font-bengali space-y-5 fade-in relative">
+      <button onclick="closeChithiViewer()" class="absolute top-4 right-4 p-2 rounded-full bg-midnight/70 text-ivory/80 hover:text-antiqueGold"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <div class="text-center border-b border-antiqueGold/20 pb-4">
+        <div class="text-xs text-antiqueGold tracking-widest uppercase font-display">A Poem Dedicated To You</div>
+        <h2 class="text-2xl sm:text-3xl font-bold text-ivory mt-1">প্রিয় ${escapeHtml(data.receiver_name)},</h2>
+        ${data.personal_note ? `<p class="text-sm text-ivory/80 italic mt-2 bg-deepPurple/40 p-3 rounded-xl border border-antiqueGold/15">“${escapeHtml(data.personal_note)}”</p>` : ''}
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="text-xl font-bold text-antiqueGold">${escapeHtml(data.poem_title)}</h3>
+        <p class="text-xs text-ivory/60">— ${escapeHtml(data.poet_name || 'KothaVerse')}</p>
+        <div class="text-sm sm:text-base leading-loose whitespace-pre-line text-ivory/95 pt-2 max-h-72 overflow-y-auto pr-1">${escapeHtml(data.poem_body)}</div>
+      </div>
+
+      <div class="pt-4 border-t border-antiqueGold/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="text-xs text-ivory/70">ভালোবাসা ও শুভেচ্ছাসহ — <strong class="text-antiqueGold">${escapeHtml(data.sender_name)}</strong></div>
+        <button onclick="closeChithiViewer(); navigate('poetry')" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs shadow-gold">
+          তুমিও একটা চিঠি পাঠাও — KothaVerse-এ
+        </button>
+      </div>
+    </div>
+  `;
+  openModal('chithi-view-modal');
+}
+
+function revealChithiLetter() {
+  const env = document.getElementById('chithi-env-el');
+  if (env) env.classList.add('opened');
+
+  const c = window._activeChithi;
+  if (c?.audio_url && typeof audioEngine !== 'undefined') {
+    audioEngine.loadAndPlay({
+      id: c.id, type: 'poem', title: c.poem_title,
+      subtitle: `উৎসর্গ: ${c.sender_name} → ${c.receiver_name}`,
+      cover: '', url: c.audio_url, duration: 150
+    });
+  } else if (typeof ambientEngine !== 'undefined' && !ambientEngine.active) {
+    ambientEngine.toggle('night');
+  }
+
+  setTimeout(() => {
+    document.getElementById('chithi-stage-closed')?.classList.add('hidden');
+    document.getElementById('chithi-stage-open')?.classList.remove('hidden');
+    lucide.createIcons();
+  }, 650);
+}
+
+function closeChithiViewer() {
+  closeModal('chithi-view-modal');
+  if (window.location.hash.startsWith('#chithi/')) {
+    navigate('home', { replace: true });
+  }
+}
+
+// Published Poet Digital Card (Canvas + QR Code Download)
+function downloadPoetCertificateCard(poemId) {
+  const p = state.poems.find((x) => x.id === poemId);
+  if (!p) return;
+
+  showToast('Published Poet কার্ড তৈরি হচ্ছে...', 'info');
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext('2d');
+
+  // Royal Midnight + Deep Purple Background
+  const grad = ctx.createLinearGradient(0, 0, 1080, 1350);
+  grad.addColorStop(0, '#140F1C');
+  grad.addColorStop(0.5, '#2E1E3C');
+  grad.addColorStop(1, '#120D19');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1080, 1350);
+
+  // Double Antique Gold Border
+  ctx.strokeStyle = '#C5A46D';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(48, 48, 984, 1254);
+  ctx.strokeStyle = 'rgba(197, 164, 109, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(66, 66, 948, 1218);
+
+  // Header Branding
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#C5A46D';
+  ctx.font = 'bold 46px "Playfair Display", serif';
+  ctx.fillText('KOTHAVERSE', 540, 165);
+
+  ctx.fillStyle = 'rgba(241, 233, 223, 0.7)';
+  ctx.font = '24px "Noto Serif Bengali", serif';
+  ctx.fillText('শব্দের পরিপাটে, মনের আলাপন', 540, 212);
+
+  // Badge
+  ctx.fillStyle = 'rgba(197, 164, 109, 0.16)';
+  ctx.fillRect(310, 275, 460, 56);
+  ctx.strokeStyle = '#C5A46D';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(310, 275, 460, 56);
+  ctx.fillStyle = '#E6C992';
+  ctx.font = 'bold 24px "Playfair Display", serif';
+  ctx.fillText('★  PUBLISHED POET  ★', 540, 312);
+
+  // Poet Name & Poem Title
+  ctx.fillStyle = '#F1E9DF';
+  ctx.font = 'bold 58px "Noto Serif Bengali", serif';
+  ctx.fillText(p.poet_name || 'কবি', 540, 445);
+
+  ctx.fillStyle = 'rgba(241, 233, 223, 0.65)';
+  ctx.font = '26px "Noto Serif Bengali", serif';
+  ctx.fillText('তাঁর প্রকাশিত রচনা', 540, 515);
+
+  ctx.fillStyle = '#C5A46D';
+  ctx.font = 'bold 46px "Noto Serif Bengali", serif';
+  ctx.fillText(`“${p.title}”`, 540, 590);
+
+  // First 3 lines preview
+  ctx.fillStyle = 'rgba(241, 233, 223, 0.85)';
+  ctx.font = '28px "Noto Serif Bengali", serif';
+  const previewLines = String(p.body || '').split('\n').filter(Boolean).slice(0, 3);
+  let y = 685;
+  previewLines.forEach((ln) => {
+    ctx.fillText(ln.slice(0, 46), 540, y);
+    y += 50;
+  });
+
+  // QR Code pointing to KothaVerse
+  const shareTarget = `${window.location.origin}${window.location.pathname}#poetry`;
+  const qrImg = new Image();
+  qrImg.crossOrigin = 'anonymous';
+  qrImg.onload = () => {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(425, 915, 230, 230);
+    ctx.drawImage(qrImg, 440, 930, 200, 200);
+
+    ctx.fillStyle = '#C5A46D';
+    ctx.font = '22px "Noto Serif Bengali", serif';
+    ctx.fillText('সম্পূর্ণ কবিতা পড়তে QR কোড স্ক্যান করুন', 540, 1190);
+    ctx.fillStyle = 'rgba(241, 233, 223, 0.45)';
+    ctx.font = '20px sans-serif';
+    ctx.fillText(window.location.host || 'kothaverse.in', 540, 1240);
+
+    const a = document.createElement('a');
+    a.download = `KothaVerse-Poet-Card-${p.slug || p.id}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+    showToast('Published Poet কার্ড ডাউনলোড হয়েছে!', 'success');
+  };
+  qrImg.onerror = () => {
+    const a = document.createElement('a');
+    a.download = `KothaVerse-Poet-Card-${p.slug || p.id}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(shareTarget)}`;
+}
+function downloadPoetCardFromSubmission(subId) {
+  const s = state.adminSubmissions.find((x) => x.id === subId);
+  if (!s) return;
+  const matchedPoem = state.poems.find((p) => p.title === s.title && p.poet_name === s.pen_name);
+  if (matchedPoem) {
+    downloadPoetCertificateCard(matchedPoem.id);
+  } else {
+    state.poems.push({ id: s.id, title: s.title, poet_name: s.pen_name, body: s.body, slug: slugify(s.title) });
+    downloadPoetCertificateCard(s.id);
+  }
+}
+// =========================================================================
+// 18. E-BOOK STORE, WATERMARKED PDF ENGINE & CUSTOM VOICE DEDICATION
+// =========================================================================
+function renderStorePage() {
+  const tab = state.storeTab || 'ebooks';
+  const cfg = getNewsletterSettings();
+
+  return `
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 fade-in font-bengali">
+      <div class="mb-8">
+        <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">KothaVerse Store & Gifts</span>
+        <h1 class="text-3xl sm:text-4xl font-bold mt-1">ই-বুক সংকলন ও কাস্টম ভয়েস গিফট</h1>
+        <p class="text-sm text-ivory/65 mt-2">কেনার জন্য আগে লগইন করুন। অ্যাপ্রুভ হলেই অ্যাপের ভেতরেই আপনার নামে ওয়াটারমার্কসহ PDF পড়তে ও ডাউনলোড করতে পারবেন।</p>
+      </div>
+
+      <div class="flex flex-wrap gap-3 mb-8 text-sm">
+        <button onclick="state.storeTab='ebooks'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'ebooks' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">ই-বুক ও সংকলন (${state.ebooks.length})</button>
+        <button onclick="state.storeTab='voice'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'voice' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">কাস্টম ভয়েস ডেডিকেশন</button>
+      </div>
+
+      ${tab === 'ebooks' ? `
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          ${state.ebooks.map((b) => {
+            const myOrder = state.myEbookOrders.find((o) => o.ebook_id === b.id);
+            const isApproved = myOrder?.status === 'approved';
+            const isPending = myOrder?.status === 'pending';
+
+            return `
+              <div class="glass-panel rounded-2xl overflow-hidden border border-antiqueGold/25 flex flex-col shadow-card">
+                <div class="relative h-56 overflow-hidden">
+                  <img src="${safeCover(b.cover_image_url, b.title)}" class="w-full h-full object-cover" />
+                  <span class="absolute top-3 right-3 px-3 py-1 rounded-full bg-midnight/85 border border-antiqueGold/40 text-antiqueGold font-bold text-xs">₹${b.price_inr}</span>
+                </div>
+                <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    <h3 class="text-xl font-bold text-ivory">${escapeHtml(b.title)}</h3>
+                    <p class="text-xs text-antiqueGold mt-0.5">${escapeHtml(b.editor_name || 'KothaVerse সম্পাদনা')}</p>
+                    <p class="text-xs text-ivory/70 mt-2 line-clamp-3 leading-relaxed">${escapeHtml(b.description || '')}</p>
+                  </div>
+                  <div>
+                    ${isApproved ? `
+                      <div class="flex gap-2">
+                        <button onclick="openWatermarkedEbook('${b.id}', 'view')" class="flex-1 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs flex items-center justify-center gap-1.5 shadow-gold">
+                          <i data-lucide="book-open" class="w-4 h-4"></i> অ্যাপে পড়ুন
+                        </button>
+                        <button onclick="openWatermarkedEbook('${b.id}', 'download')" class="px-4 py-2.5 rounded-xl border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight text-xs font-semibold transition flex items-center gap-1">
+                          <i data-lucide="download" class="w-4 h-4"></i> PDF
+                        </button>
+                      </div>
+                    ` : isPending ? `
+                      <div class="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-400/35 text-amber-200 text-xs text-center">
+                        অর্ডার যাচাই চলছে (Txn: ${escapeHtml(myOrder.transaction_id)})
+                      </div>
+                    ` : `
+                      <button onclick="openEbookOrderModal('${b.id}')" class="w-full py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs shadow-gold hover:opacity-90 transition">
+                        কিনুন — ₹${b.price_inr}
+                      </button>
+                    `}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('') || `<div class="col-span-full glass-panel rounded-2xl p-10 text-center text-ivory/60 text-sm">এখনো কোনো ই-বুক প্রকাশিত হয়নি। খুব শীঘ্রই আসছে!</div>`}
+        </div>
+      ` : `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30">
+            <h2 class="text-2xl font-bold text-antiqueGold mb-2">প্রিয়জনের নামে কাস্টম ভয়েস ডেডিকেশন</h2>
+            <p class="text-xs text-ivory/70 mb-5">জন্মদিন, অ্যানিভার্সারি বা বিশেষ দিনে আমাদের কণ্ঠশিল্পীদের কণ্ঠে প্রিয়জনের নাম নিয়ে আবৃত্তি ও ব্যাকগ্রাউন্ড মিউজিকসহ স্পেশাল অডিও গিফট।</p>
+
+            <div class="p-4 rounded-2xl bg-deepPurple/45 border border-antiqueGold/25 text-xs mb-5 flex flex-wrap items-center justify-between gap-4">
+  <div class="space-y-1">
+    <div class="text-antiqueGold font-semibold">UPI পেমেন্ট তথ্য (${escapeHtml(cfg.upi_name)})</div>
+    <div>UPI ID: <strong class="font-mono text-ivory">${escapeHtml(cfg.upi_id)}</strong>
+      <button type="button" onclick="copyTextToClipboard('${escapeHtml(cfg.upi_id)}')" class="ml-2 px-2 py-0.5 rounded bg-midnight text-antiqueGold text-[10px]">কপি</button>
+    </div>
+    <div class="text-ivory/65">পেমেন্ট করে নিচে Transaction ID দিন।</div>
+  </div>
+  ${cfg.qr_image_url ? `<img src="${escapeHtml(cfg.qr_image_url)}" alt="UPI QR" class="w-24 h-24 rounded-xl border border-antiqueGold/40 bg-white p-1 object-contain" />` : ''}
+</div>
+
+            <form onsubmit="handleVoiceOrderSubmit(event)" class="space-y-4 text-sm">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input id="vo-sender" required value="${escapeHtml(state.profile?.full_name || '')}" placeholder="আপনার নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+                <input id="vo-receiver" required placeholder="প্রিয়জনের নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select id="vo-package" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25">
+  <option value="${escapeHtml(cfg.voice_pkg_1_name)}|${cfg.voice_pkg_1_price}">${escapeHtml(cfg.voice_pkg_1_name)} — ₹${cfg.voice_pkg_1_price}</option>
+  <option value="${escapeHtml(cfg.voice_pkg_2_name)}|${cfg.voice_pkg_2_price}" selected>${escapeHtml(cfg.voice_pkg_2_name)} — ₹${cfg.voice_pkg_2_price}</option>
+  <option value="${escapeHtml(cfg.voice_pkg_3_name)}|${cfg.voice_pkg_3_price}">${escapeHtml(cfg.voice_pkg_3_name)} — ₹${cfg.voice_pkg_3_price}</option>
+</select>
+                <input id="vo-occasion" required placeholder="উপলক্ষ (যেমন: জন্মদিন / বার্ষিকী)*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input id="vo-whatsapp" required type="tel" placeholder="আপনার WhatsApp নম্বর*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+                <input id="vo-txn" required placeholder="UPI Transaction ID*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 font-mono" />
+              </div>
+              <textarea id="vo-script" rows="4" required placeholder="যে কবিতা বা বার্তাটি রেকর্ড করাতে চান তা এখানে লিখুন..." class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25"></textarea>
+              <button type="submit" class="px-7 py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">অর্ডার জমা দিন</button>
+            </form>
+          </div>
+
+          <div class="glass-panel rounded-3xl p-6 border border-antiqueGold/20 space-y-4">
+            <h3 class="text-base font-bold text-antiqueGold">আপনার ভয়েস অর্ডারসমূহ</h3>
+            ${!state.user ? `
+              <p class="text-xs text-ivory/60">অর্ডার স্ট্যাটাস দেখতে লগইন করুন।</p>
+              <button onclick="openAuthModal('login')" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">লগইন করুন</button>
+            ` : state.myVoiceOrders.length ? state.myVoiceOrders.map((o) => `
+              <div class="p-3.5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 text-xs space-y-2">
+                <div class="flex justify-between items-center">
+                  <strong class="text-ivory">${escapeHtml(o.receiver_name)} (${escapeHtml(o.occasion)})</strong>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-antiqueGold">${escapeHtml(o.status)}</span>
+                </div>
+                <div class="text-ivory/60">${escapeHtml(o.package_name)} • ₹${o.amount_inr}</div>
+                ${o.delivery_audio_url ? `
+                  <button onclick="audioEngine.loadAndPlay({id:'${o.id}',type:'recitation',title:'Gift for ${escapeHtml(o.receiver_name)}',subtitle:'KothaVerse Custom Voice',cover:'',url:'${escapeHtml(o.delivery_audio_url)}',duration:150})" class="w-full py-2 rounded-xl bg-emerald-600 text-white font-semibold">▶ অডিও শুনুন</button>
+                ` : `<div class="text-[11px] text-amber-300">রেকর্ডিং প্রক্রিয়াধীন আছে...</div>`}
+              </div>
+            `).join('') : `<p class="text-xs text-ivory/50">এখনো কোনো অর্ডার নেই।</p>`}
+          </div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+// Login Check + Open E-Book Order Modal
+function openEbookOrderModal(ebookId) {
+  if (!state.user) {
+    showToast('ই-বুক কেনার জন্য আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  const book = state.ebooks.find((x) => x.id === ebookId);
+  if (!book) return;
+
+  const cfg = state.storeSettings || {};
+  document.getElementById('eo-ebook-id').value = book.id;
+  document.getElementById('eo-book-label').textContent = `${book.title} — ₹${book.price_inr}`;
+  document.getElementById('eo-upi-id').textContent = cfg.upi_id || 'kothaverse@upi';
+  document.getElementById('eo-price').textContent = `₹${book.price_inr}`;
+  document.getElementById('eo-name').value = state.profile?.full_name || '';
+  document.getElementById('eo-whatsapp').value = '';
+  document.getElementById('eo-txn').value = '';
+  openModal('ebook-order-modal');
+}
+
+async function handleEbookOrderSubmit(e) {
+  e.preventDefault();
+  if (!state.user) return openAuthModal('login');
+
+  const payload = {
+    user_id: state.user.id,
+    ebook_id: document.getElementById('eo-ebook-id').value,
+    buyer_name: document.getElementById('eo-name').value.trim(),
+    buyer_email: state.user.email,
+    whatsapp_number: document.getElementById('eo-whatsapp').value.trim(),
+    transaction_id: document.getElementById('eo-txn').value.trim(),
+    status: 'pending'
+  };
+
+  const { error } = await sb.from('ebook_orders').insert(payload);
+  if (error) return showToast('অর্ডার জমা ব্যর্থ: ' + error.message, 'error');
+
+  closeModal('ebook-order-modal');
+  showToast('অর্ডার জমা হয়েছে! অ্যাপ্রুভ হলেই অ্যাপে PDF আনলক হবে।', 'success');
+  await loadUserPersonalData();
+  renderCurrentRoute();
+}
+
+async function handleVoiceOrderSubmit(e) {
+  e.preventDefault();
+  if (!state.user) {
+    showToast('অর্ডার করার জন্য আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  const [pkgName, amtStr] = document.getElementById('vo-package').value.split('|');
+  const payload = {
+    user_id: state.user.id,
+    sender_name: document.getElementById('vo-sender').value.trim(),
+    receiver_name: document.getElementById('vo-receiver').value.trim(),
+    occasion: document.getElementById('vo-occasion').value.trim(),
+    whatsapp_number: document.getElementById('vo-whatsapp').value.trim(),
+    script_or_poem: document.getElementById('vo-script').value.trim(),
+    package_name: pkgName,
+    amount_inr: parseInt(amtStr, 10) || 149,
+    transaction_id: document.getElementById('vo-txn').value.trim(),
+    status: 'pending'
+  };
+
+  const { error } = await sb.from('voice_dedication_orders').insert(payload);
+  if (error) return showToast('অর্ডার ব্যর্থ: ' + error.message, 'error');
+
+  e.target.reset();
+  showToast('ভয়েস ডেডিকেশন অর্ডার সফলভাবে জমা হয়েছে!', 'success');
+  await loadUserPersonalData();
+  renderCurrentRoute();
+}
+
+// =========================================================================
+// DYNAMIC WATERMARKED PDF GENERATOR (Name + Email + WhatsApp in Background)
+// =========================================================================
+function createWatermarkPngDataUrl(buyerName, buyerEmail, buyerPhone) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 900;
+  canvas.height = 520;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((-28 * Math.PI) / 180);
+  ctx.textAlign = 'center';
+
+  ctx.fillStyle = 'rgba(130, 110, 150, 0.24)';
+  ctx.font = 'bold 34px "Noto Serif Bengali", sans-serif';
+  ctx.fillText(`KothaVerse • ${buyerName}`, 0, -28);
+
+  ctx.font = '24px sans-serif';
+  ctx.fillText(buyerEmail || '', 0, 16);
+  ctx.fillText(`WA: ${buyerPhone || ''}`, 0, 54);
+  ctx.restore();
+
+  return canvas.toDataURL('image/png');
+}
+
+let activePdfBlobUrl = null;
+
+async function openWatermarkedEbook(ebookId, mode = 'view') {
+  if (!state.user) return openAuthModal('login');
+  const book = state.ebooks.find((x) => x.id === ebookId);
+  const order = state.myEbookOrders.find((o) => o.ebook_id === ebookId && o.status === 'approved');
+  if (!book || !order || !book.pdf_url) {
+    return showToast('এই ই-বুকটির অ্যাক্সেস এখনো আনলক হয়নি।', 'error');
+  }
+  if (typeof PDFLib === 'undefined') {
+    return showToast('PDF লাইব্রেরি লোড হয়নি, পেজ রিফ্রেশ করুন।', 'error');
+  }
+
+  try {
+    showToast('আপনার নামে ওয়াটারমার্কসহ PDF তৈরি হচ্ছে...', 'info');
+    const res = await fetch(book.pdf_url);
+    if (!res.ok) throw new Error('PDF ফাইল লোড করা যায়নি।');
+    const pdfBytes = await res.arrayBuffer();
+
+    const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+    const wmPng = createWatermarkPngDataUrl(order.buyer_name, order.buyer_email || state.user.email, order.whatsapp_number);
+    const wmImage = await pdfDoc.embedPng(wmPng);
+
+    const pages = pdfDoc.getPages();
+    for (const page of pages) {
+      const { width, height } = page.getSize();
+      const wmW = width * 0.82;
+      const wmH = wmW * (wmImage.height / wmImage.width);
+      page.drawImage(wmImage, {
+        x: (width - wmW) / 2,
+        y: (height - wmH) / 2,
+        width: wmW,
+        height: wmH,
+        opacity: 0.45
+      });
+    }
+
+    const watermarkedBytes = await pdfDoc.save();
+    const blob = new Blob([watermarkedBytes], { type: 'application/pdf' });
+    if (activePdfBlobUrl) URL.revokeObjectURL(activePdfBlobUrl);
+    activePdfBlobUrl = URL.createObjectURL(blob);
+
+    const safeFileName = `${book.title.replace(/[^\w\u0980-\u09FF-]+/g, '_')}_KothaVerse.pdf`;
+
+    if (mode === 'download') {
+      const a = document.createElement('a');
+      a.href = activePdfBlobUrl;
+      a.download = safeFileName;
+      a.click();
+      showToast('ওয়াটারমার্কসহ PDF ডাউনলোড শুরু হয়েছে!', 'success');
+    } else {
+      document.getElementById('pdf-reader-title').textContent = book.title;
+      document.getElementById('pdf-reader-wm-info').textContent = `Licensed to: ${order.buyer_name} • ${order.buyer_email || state.user.email} • ${order.whatsapp_number}`;
+      const dlBtn = document.getElementById('pdf-reader-download-btn');
+      dlBtn.href = activePdfBlobUrl;
+      dlBtn.download = safeFileName;
+      document.getElementById('pdf-reader-frame').src = activePdfBlobUrl;
+      openModal('pdf-reader-modal');
+    }
+  } catch (err) {
+    console.error('Watermarked PDF error:', err);
+    showToast('PDF তৈরিতে ত্রুটি: ' + err.message, 'error');
+  }
+}
+
+function closePdfReaderModal() {
+  closeModal('pdf-reader-modal');
+  document.getElementById('pdf-reader-frame').src = 'about:blank';
+}
+
+// =========================================================================
+// ADMIN CONTROL ROOM: E-BOOK UPLOAD & ORDER MANAGER
+// =========================================================================
+function renderAdminStoreTab(ebooks, ebOrders, vcOrders) {
+  return `
+    <div class="space-y-8 font-bengali">
+       <!-- 0. Store UPI, QR & Voice Pricing Settings (Synced to Supabase) -->
+      <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/30">
+        <h2 class="text-lg font-bold text-antiqueGold mb-3">স্টোর UPI, QR ও ভয়েস প্যাকেজ প্রাইস সেটিংস</h2>
+        <form onsubmit="adminSaveStoreSettings(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div>
+            <label class="block text-ivory/70 mb-1">UPI ID*</label>
+            <input id="ss-upi-id" required value="${escapeHtml(state.storeSettings.upi_id)}" class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 font-mono" />
+          </div>
+          <div>
+            <label class="block text-ivory/70 mb-1">পেমেন্ট প্রাপকের নাম</label>
+            <input id="ss-upi-name" value="${escapeHtml(state.storeSettings.upi_name)}" class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          </div>
+          <div>
+            <label class="block text-ivory/70 mb-1">UPI QR ছবি আপলোড (ঐচ্ছিক)</label>
+            <input id="ss-qr-file" type="file" accept="image/*" class="w-full text-xs mt-1" />
+          </div>
+
+          <input id="ss-p1-name" required value="${escapeHtml(state.storeSettings.voice_pkg_1_name)}" placeholder="Package 1 Name" class="md:col-span-2 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <input id="ss-p1-price" type="number" required value="${state.storeSettings.voice_pkg_1_price}" placeholder="Price ₹" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+
+          <input id="ss-p2-name" required value="${escapeHtml(state.storeSettings.voice_pkg_2_name)}" placeholder="Package 2 Name" class="md:col-span-2 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <input id="ss-p2-price" type="number" required value="${state.storeSettings.voice_pkg_2_price}" placeholder="Price ₹" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+
+          <input id="ss-p3-name" required value="${escapeHtml(state.storeSettings.voice_pkg_3_name)}" placeholder="Package 3 Name" class="md:col-span-2 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <input id="ss-p3-price" type="number" required value="${state.storeSettings.voice_pkg_3_price}" placeholder="Price ₹" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+
+          <div class="md:col-span-3">
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">স্টোর সেটিংস সেভ করুন</button>
+          </div>
+        </form>
+      </div>
+      <!-- 1. Upload New E-Book -->
+      <div>
+        <h2 class="text-xl font-bold text-antiqueGold mb-3">নতুন ই-বুক আপলোড করুন</h2>
+        <form onsubmit="adminSaveEbook(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 p-5 rounded-2xl bg-midnight/60 border border-antiqueGold/20 text-sm">
+          <input id="ae-title" required placeholder="ই-বুকের শিরোনাম*" class="px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <input id="ae-editor" value="KothaVerse সম্পাদনা" placeholder="সম্পাদক / লেখক" class="px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <input id="ae-price" type="number" required value="49" placeholder="মূল্য (₹)*" class="px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25" />
+          <div><label class="text-xs text-ivory/60">Cover Image</label><input id="ae-cover" type="file" accept="image/*" class="w-full text-xs mt-1" /></div>
+          <div class="md:col-span-2"><label class="text-xs text-ivory/60">PDF File (ebooks bucket)*</label><input id="ae-pdf" type="file" accept="application/pdf" required class="w-full text-xs mt-1" /></div>
+          <textarea id="ae-desc" rows="2" placeholder="সংক্ষিপ্ত বিবরণ..." class="md:col-span-2 px-3.5 py-2 rounded-xl bg-midnight border border-antiqueGold/25"></textarea>
+          <button type="submit" class="md:col-span-2 w-fit px-6 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold">ই-বুক প্রকাশ করুন</button>
+        </form>
+      </div>
+
+      <!-- 2. E-Book Orders -->
+      <div>
+        <h2 class="text-lg font-bold text-antiqueGold mb-3">ই-বুক অর্ডারসমূহ (${ebOrders.length})</h2>
+        <div class="space-y-2.5">
+          ${ebOrders.map((o) => `
+            <div class="p-4 rounded-2xl bg-midnight/55 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div>
+                <div class="font-semibold text-sm text-ivory">${escapeHtml(o.buyer_name)} — <span class="text-antiqueGold">${escapeHtml(o.ebooks?.title || 'E-Book')}</span></div>
+                <div class="text-ivory/65 mt-0.5">${escapeHtml(o.buyer_email || '')} • WA: ${escapeHtml(o.whatsapp_number)} • Txn: <strong class="font-mono text-antiqueGold">${escapeHtml(o.transaction_id)}</strong></div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 rounded-full uppercase text-[10px] bg-deepPurple text-ivory">${escapeHtml(o.status)}</span>
+                ${o.status !== 'approved' ? `<button onclick="adminUpdateEbookOrder('${o.id}', 'approved')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold">Approve (Unlock PDF)</button>` : ''}
+                ${o.status === 'pending' ? `<button onclick="adminUpdateEbookOrder('${o.id}', 'rejected')" class="px-3 py-1.5 rounded-lg bg-red-500/25 text-red-200">Reject</button>` : ''}
+              </div>
+            </div>
+          `).join('') || '<p class="text-xs text-ivory/50">কোনো ই-বুক অর্ডার নেই।</p>'}
+        </div>
+      </div>
+
+      <!-- 3. Custom Voice Dedication Orders -->
+      <div>
+        <h2 class="text-lg font-bold text-antiqueGold mb-3">কাস্টম ভয়েস ডেডিকেশন অর্ডার (${vcOrders.length})</h2>
+        <div class="space-y-3">
+          ${vcOrders.map((v) => `
+            <div class="p-4 rounded-2xl bg-midnight/55 border border-antiqueGold/15 text-xs space-y-2.5">
+              <div class="flex flex-wrap justify-between gap-2">
+                <div>
+                  <strong class="text-sm text-ivory">${escapeHtml(v.sender_name)} → ${escapeHtml(v.receiver_name)}</strong>
+                  <span class="ml-2 text-antiqueGold">(${escapeHtml(v.occasion)} • ₹${v.amount_inr})</span>
+                  <div class="text-ivory/65 mt-0.5">WA: ${escapeHtml(v.whatsapp_number)} • Txn: <span class="font-mono text-antiqueGold">${escapeHtml(v.transaction_id)}</span></div>
+                </div>
+                <span class="px-2.5 py-1 h-fit rounded-full uppercase text-[10px] bg-deepPurple text-antiqueGold">${escapeHtml(v.status)}</span>
+              </div>
+              <p class="p-2.5 rounded-xl bg-deepPurple/35 text-ivory/85 whitespace-pre-line">${escapeHtml(v.script_or_poem)}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="px-3 py-1.5 rounded-lg bg-antiqueGold text-midnight font-semibold cursor-pointer">
+                  অডিও আপলোড ও ডেলিভারি
+                  <input type="file" accept="audio/*" class="hidden" onchange="adminDeliverVoiceOrder('${v.id}', this.files[0], '${escapeHtml(v.whatsapp_number)}', '${escapeHtml(v.sender_name)}')" />
+                </label>
+                ${v.delivery_audio_url ? `<span class="text-emerald-300">অডিও আপলোড সম্পন্ন ✓</span>` : ''}
+              </div>
+            </div>
+          `).join('') || '<p class="text-xs text-ivory/50">কোনো ভয়েস অর্ডার নেই।</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+async function adminSaveStoreSettings(e) {
+  e.preventDefault();
+  try {
+    const qrFile = document.getElementById('ss-qr-file').files[0];
+    let qr_image_url = state.storeSettings.qr_image_url || null;
+    if (qrFile) qr_image_url = await uploadToBucket('covers', qrFile);
+
+    const payload = {
+      id: 1,
+      upi_id: document.getElementById('ss-upi-id').value.trim(),
+      upi_name: document.getElementById('ss-upi-name').value.trim() || 'KothaVerse',
+      qr_image_url,
+      voice_pkg_1_name: document.getElementById('ss-p1-name').value.trim(),
+      voice_pkg_1_price: parseInt(document.getElementById('ss-p1-price').value, 10) || 99,
+      voice_pkg_2_name: document.getElementById('ss-p2-name').value.trim(),
+      voice_pkg_2_price: parseInt(document.getElementById('ss-p2-price').value, 10) || 149,
+      voice_pkg_3_name: document.getElementById('ss-p3-name').value.trim(),
+      voice_pkg_3_price: parseInt(document.getElementById('ss-p3-price').value, 10) || 249,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await sb.from('store_settings').upsert(payload);
+    if (error) throw error;
+
+    state.storeSettings = { ...state.storeSettings, ...payload };
+    showToast('স্টোর UPI ও প্রাইস সেটিংস আপডেট হয়েছে!', 'success');
+    loadAdminTabData();
+  } catch (err) {
+    showToast('সেভ ব্যর্থ: ' + err.message, 'error');
+  }
+}
+
+async function adminSaveEbook(e) {
+  e.preventDefault();
+  try {
+    const coverFile = document.getElementById('ae-cover').files[0];
+    const pdfFile = document.getElementById('ae-pdf').files[0];
+    const coverUrl = coverFile ? await uploadToBucket('covers', coverFile) : null;
+    const pdfUrl = await uploadToBucket('ebooks', pdfFile);
+
+    const { error } = await sb.from('ebooks').insert({
+      title: document.getElementById('ae-title').value.trim(),
+      editor_name: document.getElementById('ae-editor').value.trim(),
+      price_inr: parseInt(document.getElementById('ae-price').value, 10) || 49,
+      cover_image_url: coverUrl,
+      pdf_url: pdfUrl,
+      description: document.getElementById('ae-desc').value.trim(),
+      is_published: true
+    });
+    if (error) throw error;
+    showToast('ই-বুক সফলভাবে প্রকাশিত হয়েছে!', 'success');
+    await loadAllPublicContent();
+    loadAdminTabData();
+  } catch (err) {
+    showToast('ই-বুক আপলোড ব্যর্থ: ' + err.message, 'error');
+  }
+}
+
+async function adminUpdateEbookOrder(orderId, status) {
+  const { error } = await sb.from('ebook_orders').update({ status }).eq('id', orderId);
+  if (error) return showToast('আপডেট ব্যর্থ: ' + error.message, 'error');
+  showToast(status === 'approved' ? 'অর্ডার অ্যাপ্রুভ হয়েছে! ইউজারের অ্যাপে PDF আনলক হয়ে গেছে।' : 'অর্ডার বাতিল করা হয়েছে।', 'success');
+  loadAdminTabData();
+}
+
+async function adminDeliverVoiceOrder(orderId, audioFile, waNum, senderName) {
+  if (!audioFile) return;
+  try {
+    showToast('অডিও আপলোড হচ্ছে...', 'info');
+    const audioUrl = await uploadToBucket('audio', audioFile);
+    const { error } = await sb.from('voice_dedication_orders').update({
+      delivery_audio_url: audioUrl,
+      status: 'delivered'
+    }).eq('id', orderId);
+    if (error) throw error;
+    showToast('ভয়েস গিফট ডেলিভারি সম্পন্ন!', 'success');
+    loadAdminTabData();
+
+    const num = formatWANumber(waNum);
+    if (num) {
+      const msg = `নমস্কার ${senderName},\nআপনার অর্ডার করা KothaVerse Custom Voice Dedication তৈরি হয়ে গেছে! অ্যাপে লগইন করে শুনতে পারবেন অথবা এই লিংক থেকে ডাউনলোড করুন:\n${audioUrl}`;
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+    }
+  } catch (err) {
+    showToast('ডেলিভারি ব্যর্থ: ' + err.message, 'error');
+  }
+}
 
     async function initApp() {
       applyTheme(localStorage.getItem('kv_theme') || 'dark');
       applySiteSettings();
       audioEngine.init();
       await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
+      const rawHash = (window.location.hash || '').replace(/^#/, '').trim();
+if (rawHash.startsWith('chithi/')) {
+  const code = rawHash.split('/')[1];
+  if (code) openChithiByCode(code);
+  return;
+}
       const initialRoute = (window.location.hash || '').replace(/^#/, '').trim() || 'home';
 navigate(initialRoute, { replace: true, smoothScroll: false });
       initNotifications();
@@ -4014,6 +4837,3 @@ window.addEventListener('appinstalled', () => {
   document.getElementById('pwa-install-btn')?.classList.add('hidden');
   showToast('KothaVerse সফলভাবে ইনস্টল হয়েছে!', 'success');
 });
-
-
-  
