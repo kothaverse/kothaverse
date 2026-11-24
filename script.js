@@ -1595,6 +1595,35 @@ window.addEventListener('hashchange', () => {
                 ${showPoems.map((p) => renderPoemCard(p)).join('')}
               </div>
             </section>
+            <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 my-8 font-bengali">
+  <div class="glass-panel rounded-3xl overflow-hidden border border-antiqueGold/35 bg-gradient-to-r from-deepPurple/60 via-midnight/85 to-deepPurple/50 shadow-card grid grid-cols-1 md:grid-cols-12 items-center">
+    
+    <!-- Left Side: Image -->
+    <div class="md:col-span-5 h-56 md:h-full relative overflow-hidden">
+      <img
+        src="KothaVerse Publishing & Voice Dedications.png"
+        alt="KothaVerse Store & Gifts"
+        class="w-full h-full object-cover hover:scale-105 transition duration-500"
+      />
+      <div class="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-midnight/70 via-transparent to-transparent"></div>
+    </div>
+
+    <!-- Right Side: Text & Button -->
+    <div class="md:col-span-7 p-6 sm:p-8 space-y-3">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-antiqueGold/15 border border-antiqueGold/35 text-[11px] text-antiqueGold">
+        <i data-lucide="gift" class="w-3.5 h-3.5"></i> KothaVerse Store & Gifts
+      </span>
+      <h2 class="text-xl sm:text-2xl font-bold text-ivory leading-snug">ই-বুক সংকলন ও প্রিয়জনের নামে কাস্টম ভয়েস গিফট</h2>
+      <p class="text-xs sm:text-sm text-ivory/70 leading-relaxed">আমাদের প্রকাশিত ই-বুক পড়ুন অথবা জন্মদিন ও বিশেষ দিনে কাস্টম আবৃত্তি উপহার দিন।</p>
+      <div class="pt-1">
+        <button onclick="navigate('store')" class="px-6 py-3 rounded-2xl bg-antiqueGold text-midnight font-semibold text-sm shadow-gold hover:opacity-90 transition inline-flex items-center gap-2">
+          <i data-lucide="shopping-bag" class="w-4 h-4"></i> স্টোরে যান
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
 
             <!-- Trending & Popular Strip -->
             <section class="glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/20">
