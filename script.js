@@ -1400,43 +1400,27 @@ async function adminSavePopup(e) {
     }
 
     // =========================================================================
-    // 11. SPA ROUTER
     // =========================================================================
-    function navigate(route) {
-      if (route === 'admin' && state.profile?.role !== 'admin') {
-        showToast('শুধুমাত্র অ্যাডমিনরা Control Room ব্যবহার করতে পারবেন।', 'error');
-        return;
-      }
-      state.route = route;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      document.querySelectorAll('#desktop-nav .nav-link').forEach((btn) => {
-        const active = btn.dataset.route === route;
-        btn.classList.toggle('text-antiqueGold', active);
-        btn.classList.toggle('bg-deepPurple/50', active);
-      });
-      renderCurrentRoute();
-    }
+// 11. SPA ROUTER
+// =========================================================================
+function updateNavActiveState(route) {
+  document.querySelectorAll('#desktop-nav .nav-link').forEach((btn) => {
+    const active = btn.dataset.route === route;
+    btn.classList.toggle('text-antiqueGold', active);
+    btn.classList.toggle('bg-deepPurple/50', active);
+  });
+}
 
-    function renderCurrentRoute() {
-      const root = document.getElementById('app-root');
-      switch (state.route) {
-        case 'home': root.innerHTML = renderHomePage(); break;
-        case 'poetry': root.innerHTML = renderPoetryPage(); break;
-        case 'audio-stories': root.innerHTML = renderAudioStoriesPage(); break;
-        case 'recitations': root.innerHTML = renderRecitationsPage(); break;
-        case 'youtube': root.innerHTML = renderYouTubePage(); break;
-        case 'community': root.innerHTML = renderCommunityPage(); break;
-        case 'library': root.innerHTML = renderLibraryPage(); break;
-        case 'about': root.innerHTML = renderAboutPage(); break;
-        case 'contact': root.innerHTML = renderContactPage(); break;
-        case 'admin': root.innerHTML = renderAdminShell(); loadAdminTabData(); break;
-        default: root.innerHTML = renderHomePage();
-      }
-      lucide.createIcons();
-    }
-function navigateToRoute(route, { replace = false } = {}) {
+function navigate(route, { replace = false, smoothScroll = true } = {}) {
   const cleanRoute = route || 'home';
+
+  if (cleanRoute === 'admin' && state.profile?.role !== 'admin') {
+    showToast('শুধুমাত্র অ্যাডমিনরা Control Room ব্যবহার করতে পারবেন।', 'error');
+    return;
+  }
+
   state.route = cleanRoute;
+  updateNavActiveState(cleanRoute);
 
   const targetHash = `#${cleanRoute}`;
   if (window.location.hash !== targetHash) {
@@ -1447,33 +1431,63 @@ function navigateToRoute(route, { replace = false } = {}) {
     }
   }
 
+  window.scrollTo({ top: 0, behavior: smoothScroll ? 'smooth' : 'auto' });
   renderCurrentRoute();
 }
 
-function syncRouteFromHash() {
+function renderCurrentRoute() {
+  const root = document.getElementById('app-root');
+  if (!root) return;
+
+  switch (state.route) {
+    case 'home': root.innerHTML = renderHomePage(); break;
+    case 'poetry': root.innerHTML = renderPoetryPage(); break;
+    case 'audio-stories': root.innerHTML = renderAudioStoriesPage(); break;
+    case 'recitations': root.innerHTML = renderRecitationsPage(); break;
+    case 'youtube': root.innerHTML = renderYouTubePage(); break;
+    case 'community': root.innerHTML = renderCommunityPage(); break;
+    case 'library': root.innerHTML = renderLibraryPage(); break;
+    case 'about': root.innerHTML = renderAboutPage(); break;
+    case 'contact': root.innerHTML = renderContactPage(); break;
+    case 'admin': root.innerHTML = renderAdminShell(); loadAdminTabData(); break;
+    default: root.innerHTML = renderHomePage();
+  }
+
+  if (typeof lucide !== 'undefined' && lucide?.createIcons) {
+    lucide.createIcons();
+  }
+}
+
+function syncRouteFromLocation() {
   const hashRoute = (window.location.hash || '').replace(/^#/, '').trim();
   const nextRoute = hashRoute || 'home';
+
+  if (nextRoute === 'admin' && state.profile?.role !== 'admin') {
+    state.route = 'home';
+    updateNavActiveState('home');
+    renderCurrentRoute();
+    return;
+  }
+
   if (state.route !== nextRoute) {
     state.route = nextRoute;
+    updateNavActiveState(nextRoute);
     renderCurrentRoute();
   }
 }
 
-// Browser / mobile Back & Forward button handle korbe
 window.addEventListener('popstate', () => {
-  syncRouteFromHash();
+  syncRouteFromLocation();
 });
 
 window.addEventListener('hashchange', () => {
-  syncRouteFromHash();
+  syncRouteFromLocation();
 });
 
-// Page first load hole hash onujayi route set korbe
 document.addEventListener('DOMContentLoaded', () => {
   const initialRoute = (window.location.hash || '').replace(/^#/, '').trim() || state.route || 'home';
-  navigateToRoute(initialRoute, { replace: true });
+  navigate(initialRoute, { replace: true, smoothScroll: false });
 });
-
     // =========================================================================
     // 12. PAGE RENDERERS
     // =========================================================================
