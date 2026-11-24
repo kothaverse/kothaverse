@@ -19,7 +19,9 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="./script.js" defer></script>
+  
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -373,6 +375,56 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
   animation: btnShine 3.2s ease-in-out infinite;
 }
 
+/* Digital Chithi Envelope Animation */
+.chithi-envelope {
+  position: relative;
+  width: 280px;
+  height: 185px;
+  background: linear-gradient(145deg, #2b1c38, #17121f);
+  border: 1.5px solid rgba(197, 164, 109, 0.55);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+.chithi-envelope:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 24px 60px rgba(197, 164, 109, 0.2);
+}
+.chithi-flap {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 100px;
+  background: linear-gradient(160deg, #3d2850, #23172f);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  transform-origin: top center;
+  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 3;
+}
+.chithi-envelope.opened .chithi-flap {
+  transform: rotateX(180deg);
+}
+.chithi-seal {
+  position: absolute;
+  top: 78px; left: 50%;
+  transform: translateX(-50%);
+  width: 44px; height: 44px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, #e5c98b, #b48a46);
+  color: #17121f;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  z-index: 4;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.chithi-envelope.opened .chithi-seal {
+  opacity: 0;
+  transform: translateX(-50%) scale(0.6);
+}
+
 
   </style>
 </head>
@@ -416,6 +468,7 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
         <button data-route="library" onclick="navigate('library')" class="nav-link px-2.5 py-2 rounded-lg text-ivory/80 hover:text-antiqueGold hover:bg-deepPurple/40 transition" data-i18n="nav_library">লাইব্রেরি</button>
         <button data-route="about" onclick="navigate('about')" class="nav-link px-2.5 py-2 rounded-lg text-ivory/80 hover:text-antiqueGold hover:bg-deepPurple/40 transition" data-i18n="nav_about">পরিচিতি</button>
         <button data-route="contact" onclick="navigate('contact')" class="nav-link px-2.5 py-2 rounded-lg text-ivory/80 hover:text-antiqueGold hover:bg-deepPurple/40 transition" data-i18n="nav_contact">যোগাযোগ</button>
+        <button onclick="navigate('store')" data-route="store" class="nav-link px-3 py-1.5 rounded-xl text-sm font-bengali hover:text-antiqueGold transition">স্টোর ও গিফট</button>
       </nav>
 
       <!-- Right Controls: Search, Ambient, Language, Auth, Mobile Menu -->
@@ -471,6 +524,7 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
           <button onclick="navigate('library'); toggleMobileDrawer(false)" class="text-left px-3 py-2.5 rounded-xl hover:bg-deepPurple/50 flex items-center gap-3"><i data-lucide="bookmark" class="w-4 h-4 text-antiqueGold"></i> আমার লাইব্রেরি</button>
           <button onclick="navigate('about'); toggleMobileDrawer(false)" class="text-left px-3 py-2.5 rounded-xl hover:bg-deepPurple/50 flex items-center gap-3"><i data-lucide="info" class="w-4 h-4 text-antiqueGold"></i> KothaVerse পরিচিতি</button>
           <button onclick="navigate('contact'); toggleMobileDrawer(false)" class="text-left px-3 py-2.5 rounded-xl hover:bg-deepPurple/50 flex items-center gap-3"><i data-lucide="mail" class="w-4 h-4 text-antiqueGold"></i> যোগাযোগ</button>
+          <button onclick="navigate('store')" data-route="store" class="nav-link px-3 py-1.5 rounded-xl text-sm font-bengali hover:text-antiqueGold transition">স্টোর ও গিফট</button>
           <button onclick="toggleLanguage(); toggleMobileDrawer(false)" class="text-left px-3 py-2.5 rounded-xl hover:bg-deepPurple/50 flex items-center gap-3 text-antiqueGold"><i data-lucide="languages" class="w-4 h-4"></i> ভাষা পরিবর্তন (BN / EN)</button>
           <button id="mobile-admin-btn" onclick="navigate('admin'); toggleMobileDrawer(false)" class="hidden text-left px-3 py-2.5 rounded-xl bg-antiqueGold/15 border border-antiqueGold/40 text-antiqueGold flex items-center gap-3 mt-2"><i data-lucide="shield-check" class="w-4 h-4"></i> Admin Control Room</button>
         </div>
@@ -646,6 +700,48 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
       </div>
     </div>
   </div>
+  <!-- E-Book Order Modal (Login Required) -->
+<div id="ebook-order-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel bg-midnight/95 border border-antiqueGold/35 rounded-3xl max-w-md w-full p-6 relative font-bengali">
+    <button onclick="closeModal('ebook-order-modal')" class="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-deepPurple/60"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <h3 class="text-xl font-bold text-antiqueGold mb-1">ই-বুক অর্ডার করুন</h3>
+    <p id="eo-book-label" class="text-xs text-ivory/75 mb-4"></p>
+
+    <div class="p-3.5 rounded-2xl bg-deepPurple/45 border border-antiqueGold/25 text-xs space-y-1 mb-4">
+      <div class="text-antiqueGold font-semibold">UPI পেমেন্ট তথ্য:</div>
+      <div>UPI ID: <strong id="eo-upi-id" class="font-mono text-ivory"></strong></div>
+      <div>মূল্য: <strong id="eo-price" class="text-antiqueGold"></strong></div>
+      <div class="text-[11px] text-ivory/65">পেমেন্ট করে Transaction ID দিন। অ্যাডমিন অ্যাপ্রুভ করলেই আপনার অ্যাপে PDF আনলক হয়ে যাবে।</div>
+    </div>
+
+    <form onsubmit="handleEbookOrderSubmit(event)" class="space-y-3 text-sm">
+      <input type="hidden" id="eo-ebook-id" />
+      <input id="eo-name" required placeholder="আপনার সম্পূর্ণ নাম*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+      <input id="eo-whatsapp" required type="tel" placeholder="WhatsApp নম্বর (10 digit)*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+      <input id="eo-txn" required placeholder="UPI Transaction ID / UTR নম্বর*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 font-mono" />
+      <button type="submit" class="w-full py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">অর্ডার কনফার্ম করুন</button>
+    </form>
+  </div>
+</div>
+
+<!-- In-App Watermarked PDF Reader Modal -->
+<div id="pdf-reader-modal" class="hidden fixed inset-0 z-50 bg-midnight/95 backdrop-blur-xl flex flex-col p-3 sm:p-5">
+  <div class="flex items-center justify-between gap-3 pb-3 border-b border-antiqueGold/25 font-bengali">
+    <div class="min-w-0">
+      <h3 id="pdf-reader-title" class="text-base sm:text-lg font-bold text-antiqueGold truncate">ই-বুক রিডার</h3>
+      <p id="pdf-reader-wm-info" class="text-[11px] text-ivory/60 truncate"></p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <a id="pdf-reader-download-btn" href="#" download class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs flex items-center gap-1.5">
+        <i data-lucide="download" class="w-4 h-4"></i> ডাউনলোড PDF
+      </a>
+      <button onclick="closePdfReaderModal()" class="p-2 rounded-xl bg-deepPurple/60 text-ivory hover:text-antiqueGold"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+  </div>
+  <div class="flex-1 mt-3 rounded-2xl overflow-hidden border border-antiqueGold/25 bg-black/50">
+    <iframe id="pdf-reader-frame" class="w-full h-full" title="KothaVerse E-Book Reader"></iframe>
+  </div>
+</div>
 
   <!-- 0.6 Audio Queue Modal -->
   <div id="queue-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
@@ -871,6 +967,36 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
     </div>
   </div>
 </div>
+<!-- Digital Chithi Create Modal -->
+<div id="chithi-create-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel bg-midnight/95 border border-antiqueGold/35 rounded-3xl max-w-lg w-full p-6 relative font-bengali max-h-[90vh] overflow-y-auto">
+    <button onclick="closeModal('chithi-create-modal')" class="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-deepPurple/60"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <h3 class="text-xl font-bold text-antiqueGold mb-1">ডিজিটাল চিঠি পাঠান</h3>
+    <p class="text-xs text-ivory/65 mb-4">প্রিয়জনকে এই কবিতাটি উৎসর্গ করে একটি স্পেশাল লিংক তৈরি করুন।</p>
+    <form onsubmit="handleCreateChithi(event)" class="space-y-3 text-sm">
+      <input type="hidden" id="chithi-poem-id" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input id="chithi-sender" required placeholder="আপনার নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+        <input id="chithi-receiver" required placeholder="প্রিয়জনের নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
+      </div>
+      <textarea id="chithi-note" rows="3" placeholder="ব্যক্তিগত বার্তা (ঐচ্ছিক, যেমন: জন্মদিনের শুভেচ্ছা বা মনের কোনো কথা)..." class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25"></textarea>
+      <button type="submit" class="w-full py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">চিঠির লিংক তৈরি করুন</button>
+    </form>
+    <div id="chithi-share-box" class="hidden mt-4 p-4 rounded-2xl bg-deepPurple/45 border border-antiqueGold/30 space-y-2.5">
+      <p class="text-xs text-emerald-300 font-semibold">আপনার ডিজিটাল চিঠি তৈরি হয়ে গেছে!</p>
+      <input id="chithi-link-output" readonly class="w-full px-3 py-2 rounded-xl bg-midnight text-xs font-mono text-antiqueGold border border-antiqueGold/25" />
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="copyTextToClipboard(document.getElementById('chithi-link-output').value)" class="flex-1 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">লিংক কপি করুন</button>
+        <button type="button" onclick="shareChithiOnWA()" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs">WhatsApp-এ পাঠান</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Digital Chithi Viewer Modal (Receiver sees Envelope -> Letter) -->
+<div id="chithi-view-modal" class="hidden fixed inset-0 z-50 bg-midnight/95 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto">
+  <div id="chithi-view-body" class="max-w-xl w-full my-auto"></div>
+</div>
 
   <!-- 7. Custom Confirmation Modal -->
   <div id="confirm-modal" class="fixed inset-0 z-[70] hidden">
@@ -889,5 +1015,6 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
 
   <!-- Toast Container -->
   <div id="toast-container" class="fixed top-20 right-4 z-[80] flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
-</body>
+ </body>
 </html>
+    
