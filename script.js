@@ -4068,7 +4068,8 @@ async function syncPostsFreshly({ forceRender = false } = {}) {
 
     if (state.route === 'admin') return;
 
-    if ((forceRender || hasDataChanged) && !isYouTubeRouteOrPlaying()) {
+    const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+    if ((forceRender || hasDataChanged) && !isYouTubeRouteOrPlaying() && !isTyping) {
       renderCurrentRoute();
     }
   } catch (err) {
@@ -4853,12 +4854,14 @@ localStorage.setItem = function (key, value) {
 function applyRemoteSettingsToLocal(remoteSettings) {
   if (!remoteSettings || typeof remoteSettings !== 'object') return;
 
+  let hasChanged = false;
   _isApplyingRemoteSettings = true;
   try {
     Object.entries(remoteSettings).forEach(([key, remoteVal]) => {
       if (!remoteVal || typeof remoteVal !== 'object') return;
       try {
-        const localExisting = JSON.parse(localStorage.getItem(key) || '{}');
+        const oldRaw = localStorage.getItem(key) || '';
+        const localExisting = oldRaw ? JSON.parse(oldRaw) : {};
         const merged = { ...remoteVal };
 
         // Admin-er local Gemini API Key jate overwrite na hoy
@@ -4866,20 +4869,25 @@ function applyRemoteSettingsToLocal(remoteSettings) {
         if (localExisting.apiKey) merged.apiKey = localExisting.apiKey;
         if (localExisting.gemini_api_key) merged.gemini_api_key = localExisting.gemini_api_key;
 
-        _origLocalSetItem(key, JSON.stringify(merged));
+        const nextRaw = JSON.stringify(merged);
+        if (nextRaw !== oldRaw) {
+          _origLocalSetItem(key, nextRaw);
+          hasChanged = true;
+        }
       } catch (e) { /* ignore */ }
     });
   } finally {
     _isApplyingRemoteSettings = false;
   }
 
-  // UI sathe sathe refresh kora jate Incognito-te first load-ei dekha jay
-  if (typeof applyWebsiteSettings === 'function') applyWebsiteSettings();
-  if (typeof renderNavbar === 'function') renderNavbar();
-  if (typeof renderFooter === 'function') renderFooter();
-  if (typeof renderCurrentRoute === 'function' && state.route !== 'admin') renderCurrentRoute();
+  // Shudhu settings-e ashol change aslei UI update hobe, bar-bar refresh hobe na
+  if (hasChanged) {
+    if (typeof applyWebsiteSettings === 'function') applyWebsiteSettings();
+    if (typeof renderNavbar === 'function') renderNavbar();
+    if (typeof renderFooter === 'function') renderFooter();
+    if (typeof renderCurrentRoute === 'function' && state.route !== 'admin') renderCurrentRoute();
+  }
 }
-
 async function syncSettingsToSupabase(showSuccess = false) {
   if (state.profile?.role !== 'admin') return;
 
