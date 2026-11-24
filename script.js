@@ -4301,7 +4301,18 @@ function downloadPoetCardFromSubmission(subId) {
 // =========================================================================
 function renderStorePage() {
   const tab = state.storeTab || 'ebooks';
-  const cfg = getNewsletterSettings();
+  const cfg = {
+    upi_id: 'kothaverse@upi',
+    upi_name: 'KothaVerse',
+    qr_image_url: '',
+    voice_pkg_1_name: 'Mini Voice Note (১ মিনিট)',
+    voice_pkg_1_price: 99,
+    voice_pkg_2_name: 'Standard Dedication (২-৩ মিনিট)',
+    voice_pkg_2_price: 149,
+    voice_pkg_3_name: 'Premium Cinematic Gift (কবিতা + মেসেজ)',
+    voice_pkg_3_price: 249,
+    ...(state.storeSettings || {})
+  };
 
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 fade-in font-bengali">
