@@ -1484,10 +1484,6 @@ window.addEventListener('hashchange', () => {
   syncRouteFromLocation();
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-  const initialRoute = (window.location.hash || '').replace(/^#/, '').trim() || state.route || 'home';
-  navigate(initialRoute, { replace: true, smoothScroll: false });
-});
     // =========================================================================
     // 12. PAGE RENDERERS
     // =========================================================================
@@ -3846,14 +3842,24 @@ let lastPublicSnapshot = '';
 
 function getPublicDataSnapshot() {
   return JSON.stringify({
-    poems: (state.poems || []).map(x => [x.id, x.title, x.updated_at, x.views]),
-    audioStories: (state.audioStories || []).map(x => [x.id, x.title, x.updated_at, x.views]),
-    recitations: (state.recitations || []).map(x => [x.id, x.title, x.updated_at, x.views]),
+    poems: (state.poems || []).map(x => [x.id, x.title, x.updated_at, x.views_count]),
+    audioStories: (state.audioStories || []).map(x => [x.id, x.title, x.updated_at, x.duration_sec]),
+    recitations: (state.recitations || []).map(x => [x.id, x.title, x.updated_at, x.duration_sec]),
     youtubeVideos: (state.youtubeVideos || []).map(x => [x.id, x.title, x.published_at]),
-    communityPosts: (state.communityPosts || []).map(x => [x.id, x.content, x.created_at, x.is_pinned]),
+    communityPosts: (state.communityPosts || []).map(x => [x.id, x.title, x.body, x.created_at]),
     categories: (state.categories || []).map(x => [x.id, x.name, x.sort_order]),
     dailyQuoteId: state.dailyQuote?.id
   });
+}
+
+function hasUnsavedFormOrAdminDraft() {
+  if (state.route === 'admin') return true;
+
+  const activeTag = document.activeElement?.tagName;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return true;
+
+  return Array.from(document.querySelectorAll('#app-root input, #app-root textarea'))
+    .some(el => el.type !== 'hidden' && el.type !== 'password' && el.value && el.value.trim().length > 0);
 }
 
 function isYouTubeRouteOrPlaying() {
@@ -3882,9 +3888,7 @@ async function syncPostsFreshly({ forceRender = false } = {}) {
     const hasDataChanged = nextSnapshot !== lastPublicSnapshot;
     lastPublicSnapshot = nextSnapshot;
 
-    if (state.route === 'admin' && typeof loadAdminTabData === 'function') {
-      await loadAdminTabData();
-    }
+    if (state.route === 'admin') return;
 
     if ((forceRender || hasDataChanged) && !isYouTubeRouteOrPlaying()) {
       renderCurrentRoute();
@@ -3899,11 +3903,16 @@ async function syncPostsFreshly({ forceRender = false } = {}) {
 window.refreshKothaVerseData = (opts) => syncPostsFreshly({ forceRender: true, ...opts });
 
 setInterval(() => {
-  const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-  if (!document.hidden && !isTyping) {
+  if (!document.hidden && !hasUnsavedFormOrAdminDraft()) {
     syncPostsFreshly({ forceRender: false });
   }
-}, 1000);
+}, 5000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !hasUnsavedFormOrAdminDraft()) {
+    syncPostsFreshly({ forceRender: false });
+  }
+});
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
@@ -3916,7 +3925,8 @@ document.addEventListener('visibilitychange', () => {
       applySiteSettings();
       audioEngine.init();
       await Promise.all([loadSessionAndProfile(), loadAllPublicContent()]);
-      navigate('home');
+      const initialRoute = (window.location.hash || '').replace(/^#/, '').trim() || 'home';
+navigate(initialRoute, { replace: true, smoothScroll: false });
       initNotifications();
       setTimeout(() => checkAndShowSpecialPopup(false), 1200);
 
