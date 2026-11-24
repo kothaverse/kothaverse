@@ -3086,11 +3086,12 @@ window.addEventListener('hashchange', () => {
     }
 
     // =========================================================================
+// =========================================================================
     // 14. KOTHAVERSE AI INTELLIGENCE CENTER (Admin-Only Draft & Copilot Studio)
     // =========================================================================
     function renderAICenterTab() {
       const cfg = getSiteSettings();
-      const hasKey = !!cfg.aiApiKey;
+      const hasKey = !!(cfg.aiApiKey && cfg.aiApiKey.trim());
       return `
         <div class="space-y-6 font-bengali">
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -3117,10 +3118,10 @@ window.addEventListener('hashchange', () => {
               </select>
               <textarea id="ai-studio-input" rows="3" placeholder="বিষয়, কবিতার লাইন বা গল্পের শিরোনাম লিখুন..." class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-xs focus:outline-none focus:border-antiqueGold"></textarea>
               <div class="flex flex-wrap gap-2">
-                <button onclick="runAIStudio()" class="px-5 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs flex items-center gap-1.5">
+                <button type="button" onclick="runAIStudio()" class="px-5 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs flex items-center gap-1.5">
                   <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> ড্রাফট তৈরি করুন
                 </button>
-                <button onclick="copyTextToClipboard(document.getElementById('ai-studio-output').textContent)" class="px-3.5 py-2 rounded-xl border border-antiqueGold/30 text-xs text-antiqueGold">আউটপুট কপি</button>
+                <button type="button" onclick="copyTextToClipboard(document.getElementById('ai-studio-output').textContent)" class="px-3.5 py-2 rounded-xl border border-antiqueGold/30 text-xs text-antiqueGold">আউটপুট কপি</button>
               </div>
               <div id="ai-studio-output" class="p-4 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 text-xs whitespace-pre-line leading-relaxed min-h-[130px] text-ivory/85">এখানে AI-এর তৈরি ড্রাফট দেখা যাবে...</div>
             </div>
@@ -3134,12 +3135,10 @@ window.addEventListener('hashchange', () => {
                     'সবচেয়ে জনপ্রিয় কবিতাগুলো দেখাও',
                     'আগামী সপ্তাহের content calendar তৈরি করো',
                     'অপেক্ষমাণ submissions কতগুলো আছে?'
-                  ].map((q) => `<button onclick="document.getElementById('ai-copilot-input').value='${q}'; runAICopilot()" class="px-2.5 py-1 rounded-lg bg-deepPurple/50 border border-antiqueGold/20 text-[11px] text-ivory/80 hover:border-antiqueGold">${q}</button>`).join('')}
+                  ].map((q) => `<button type="button" onclick="const inp = document.getElementById('ai-copilot-input'); if (inp) { inp.value = '${q}'; runAICopilot(); }" class="px-2.5 py-1 rounded-lg bg-deepPurple/50 border border-antiqueGold/20 text-[11px] text-ivory/80 hover:border-antiqueGold">${q}</button>`).join('')}
                 </div>
                 <div id="ai-copilot-log" class="space-y-2.5 max-h-60 overflow-y-auto p-3 rounded-xl bg-midnight/80 border border-antiqueGold/15 text-xs">
-                  ${state.aiCopilotLog.length ? state.aiCopilotLog.map((m) => `
-                    <div class="p-2.5 rounded-xl ${m.role === 'user' ? 'bg-antiqueGold/15 text-antiqueGold ml-6' : 'bg-deepPurple/45 text-ivory/90 mr-6 whitespace-pre-line'}">${escapeHtml(m.text)}</div>
-                  `).join('') : '<div class="text-ivory/50">নমস্কার অ্যাডমিন! আপনার প্ল্যাটফর্মের ডেটা বা কনটেন্ট প্ল্যানিং নিয়ে যেকোনো নির্দেশ দিন।</div>'}
+                  ${renderCopilotMessagesHTML()}
                 </div>
               </div>
               <form onsubmit="event.preventDefault(); runAICopilot()" class="flex gap-2">
@@ -3152,27 +3151,72 @@ window.addEventListener('hashchange', () => {
       `;
     }
 
-    async function callOptionalGemini(promptText) {
-      const apiKey = getSiteSettings().aiApiKey?.trim();
-      if (!apiKey) return null;
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-        });
-        const data = await res.json();
-        return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
-      } catch (e) {
-        return null;
+    function renderCopilotMessagesHTML() {
+      if (!state.aiCopilotLog || !state.aiCopilotLog.length) {
+        return '<div class="text-ivory/50">নমস্কার অ্যাডমিন! আপনার প্ল্যাটফর্মের ডেটা বা কনটেন্ট প্ল্যানিং নিয়ে যেকোনো নির্দেশ দিন।</div>';
+      }
+      return state.aiCopilotLog.map((m) => `
+        <div class="p-2.5 rounded-xl ${m.role === 'user' ? 'bg-antiqueGold/15 text-antiqueGold ml-6' : 'bg-deepPurple/45 text-ivory/90 mr-6 whitespace-pre-line'}">${escapeHtml(m.text)}</div>
+      `).join('');
+    }
+
+    function refreshCopilotLogUI() {
+      const logEl = document.getElementById('ai-copilot-log');
+      if (logEl) {
+        logEl.innerHTML = renderCopilotMessagesHTML();
+        logEl.scrollTop = logEl.scrollHeight;
       }
     }
 
+    async function callOptionalGemini(promptText) {
+      const apiKey = getSiteSettings().aiApiKey?.trim();
+      if (!apiKey) return null;
+
+      const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+      let lastError = '';
+
+      for (const modelName of models) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: promptText }] }]
+              })
+            }
+          );
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            lastError = data?.error?.message || `HTTP ${res.status}`;
+            console.warn(`Gemini (${modelName}) error:`, lastError);
+            continue;
+          }
+
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
+          lastError = 'Empty response from Gemini';
+        } catch (err) {
+          lastError = err?.message || 'Network request failed';
+          console.error(`Gemini (${modelName}) fetch failed:`, err);
+        }
+      }
+
+      if (lastError && typeof showToast === 'function') {
+        showToast(`Gemini API ত্রুটি: ${lastError}`, 'error');
+      }
+      return null;
+    }
+
     async function runAIStudio() {
-      const task = document.getElementById('ai-task-type').value;
-      const input = document.getElementById('ai-studio-input').value.trim();
+      const task = document.getElementById('ai-task-type')?.value || 'poem_idea';
+      const input = document.getElementById('ai-studio-input')?.value.trim() || '';
       const out = document.getElementById('ai-studio-output');
+      if (!out) return;
       if (!input) return showToast('আগে কিছু বিষয় বা টেক্সট লিখুন।', 'info');
+
       out.textContent = 'ড্রাফট তৈরি হচ্ছে...';
 
       const taskPrompts = {
@@ -3190,10 +3234,9 @@ window.addEventListener('hashchange', () => {
         return;
       }
 
-      // Smart local template fallback when no API key is configured
       const fallbacks = {
         poem_idea: `শিরোনাম প্রস্তাবনা (${input}):\n১. নীরবতার ওপারে ${input}\n২. শেষ বিকেলের ${input}\n৩. অলিখিত চিঠিতে ${input}\n\nপ্রথম স্তবক (ড্রাফট):\nসন্ধ্যার মৃদু আলোয় যখন শব্দ থেমে যায়,\n${input}-এর ছায়া তখন জানালার পাশে দাঁড়ায়।\nকিছু অনুভূতি আজও বলা হয়নি কোনোদিন,\nতবু প্রতিটি পংক্তিতে বাজে তারই মৃদু বীণ।`,
-        story_outline: `অডিও গল্পের আউটলাইন — "${input}"\n• সূচনা (0:00–1:00): রাতের নিস্তব্ধ আবহ ও মূল চরিত্রের পরিচয় (Rain/Night ambience)।\n• ঘটনাপ্রবাহ (1:00–3:30): একটি পুরোনো স্মৃতি বা অপ্রত্যাশিত সাক্ষাৎ।\n• ক্লাইম্যাক্স ও সমাপ্তি (3:30–5:00): হৃদয়স্পর্শী উপলব্ধি ও মৃদু পিয়ানো আউট্রো।`,
+        story_outline: `অডিও গল্পের আউটলাইন — "${input}"\n• সূচনা (0:00–1:00): রাতের নিস্তব্ধ আবহ ও মূল চরিত্রের পরিচয় (Rain/Night ambience)।\n• ঘটনাপ্রবাহ (1:00–3:30): একটি পুরোনো স্মৃতি বা অপ্রত্যাশিত সাক্ষাৎ।\n• ক্লাইম্যাক্স ও সমাপ্তি (3:30–5:00): হৃদয়স্পর্শী উপলব্ধি ও মৃদু পিয়ানো আউট্রো।`,
         yt_pack: `YouTube Title: ${input} | বাংলা কবিতা ও আবৃত্তি | KothaVerse\n\nDescription:\nশব্দের পরিপাটে, মনের আলাপন। শুনুন আমাদের নতুন পরিবেশনা "${input}"।\nরাতের শান্ত পরিবেশে হেডফোন দিয়ে শোনার অনুরোধ রইল।\n\nHashtags:\n#KothaVerse #BanglaKobita #BengaliAudioStory #Abritti #বাংলাকবিতা`,
         seo_pack: `SEO Title: ${input} — বাংলা কবিতা ও অডিও গল্প | KothaVerse\nMeta Description: KothaVerse-এ পড়ুন ও শুনুন "${input}"। নির্বাচিত বাংলা কবিতা, আবৃত্তি এবং রাতের অডিও গল্পের অনন্য সংগ্রহ।\nKeywords: ${input}, বাংলা কবিতা, KothaVerse, Bengali Poetry, Audio Story`,
         social_caption: `কিছু কথা শুধু শোনা যায় না, অনুভব করতে হয়... ✨\n\nনতুন পরিবেশনা: "${input}" এখন KothaVerse-এ।\nলিংক বায়োতে। 🎧📖\n\n#KothaVerse #কথাVerse #BanglaSahitya #BengaliPoetry`,
@@ -3204,16 +3247,20 @@ window.addEventListener('hashchange', () => {
 
     async function runAICopilot() {
       const inp = document.getElementById('ai-copilot-input');
-      const q = inp.value.trim();
+      const q = inp?.value.trim() || '';
       if (!q) return;
       inp.value = '';
+
       state.aiCopilotLog.push({ role: 'user', text: q });
+      refreshCopilotLogUI();
 
       const topPoems = [...state.poems].sort((a, b) => (b.views_count || 0) - (a.views_count || 0)).slice(0, 5);
       const pendingSubs = state.adminSubmissions.filter((s) => s.status === 'pending').length;
       const contextSummary = `Poems: ${state.poems.length}, Audio Stories: ${state.audioStories.length}, Recitations: ${state.recitations.length}, YouTube: ${state.youtubeVideos.length}, Top Poems: ${topPoems.map((p) => `${p.title} (${p.views_count || 0})`).join(', ')}`;
 
-      let reply = await callOptionalGemini(`You are KothaVerse Admin Copilot. Reply concisely in Bengali. Platform data: ${contextSummary}. Admin query: ${q}`);
+      let reply = await callOptionalGemini(
+        `You are KothaVerse Admin Copilot. Reply concisely in Bengali. Platform data: ${contextSummary}. Admin query: ${q}`
+      );
 
       if (!reply) {
         const lower = q.toLowerCase();
@@ -3229,11 +3276,7 @@ window.addEventListener('hashchange', () => {
       }
 
       state.aiCopilotLog.push({ role: 'assistant', text: reply });
-      const box = document.getElementById('admin-tab-body');
-      if (box && state.adminTab === 'ai-center') {
-        box.innerHTML = renderAICenterTab();
-        lucide.createIcons();
-      }
+      refreshCopilotLogUI();
     }
 
     // =========================================================================
