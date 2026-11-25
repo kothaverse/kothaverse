@@ -5388,7 +5388,7 @@ async function syncSettingsToSupabase(showSuccess = false) {
   if (error) {
     showToast('Global settings sync ব্যর্থ: ' + error.message, 'error');
   } else if (showSuccess) {
-    showToast('Settings সব ইউজারের জন্য আপডেট হয়েছে!', 'success');
+    showToast('..', 'success');
   }
 }
 
