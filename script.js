@@ -3014,6 +3014,14 @@ async function refreshAdminBadges() {
                           <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp মেসেজ পাঠান
                         </button>
                       ` : ''}
+                      <!-- Action Buttons -->
+<button onclick="adminCheckPlagiarism('${s.id}')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500 hover:text-midnight flex items-center gap-1 text-xs transition">
+  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Plagiarism Check
+</button>
+
+<button onclick="toggleRejectBox('${s.id}')" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-400/40 text-red-200 hover:bg-red-600 hover:text-white flex items-center gap-1 text-xs transition">
+  <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> প্রত্যাখ্যান
+</button>
                       ${s.status === 'approved' ? `
   <button onclick="downloadPoetCardFromSubmission('${s.id}')" class="px-3 py-1.5 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight flex items-center gap-1.5 transition">
     <i data-lucide="award" class="w-3.5 h-3.5"></i> Poet Card
