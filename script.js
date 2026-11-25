@@ -2986,7 +2986,7 @@ async function refreshAdminBadges() {
       </div>
     </form>
   `;
-        } else if (t === 'moderation') {
+     } else if (t === 'moderation') {
           const [subRes, repRes] = await Promise.all([
             sb.from('user_submissions').select('*').order('created_at', { ascending: false }),
             sb.from('content_reports').select('*').order('created_at', { ascending: false })
@@ -2995,43 +2995,108 @@ async function refreshAdminBadges() {
           box.innerHTML = `
             <h2 class="font-bengali text-xl font-bold text-antiqueGold mb-4">পাঠকদের পাঠানো লেখা (Write With KothaVerse)</h2>
             <div class="space-y-3 mb-8">
-              ${state.adminSubmissions.map((s) => `
-                <div class="p-4 rounded-2xl bg-midnight/60 border border-antiqueGold/20">
+              ${state.adminSubmissions.map((s) => {
+                const isChecked = s.plagiarism_score !== null && s.plagiarism_score !== undefined;
+                const score = isChecked ? Number(s.plagiarism_score) : null;
+                const isSafe = isChecked && score < 30;
+
+                const scoreBadge = !isChecked
+                  ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/15 border border-amber-400/35 text-amber-300 font-bengali">Plagiarism যাচাই বাকি</span>`
+                  : isSafe
+                  ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono font-bold">Plagiarism: ${score}% (নিরাপদ)</span>`
+                  : `<span class="px-2 py-0.5 rounded-full text-[10px] bg-red-600/25 border border-red-400/50 text-red-200 font-mono font-bold">Plagiarism: ${score}% (উচ্চ ঝুঁকি)</span>`;
+
+                return `
+                <div class="p-4 rounded-2xl bg-midnight/60 border ${isChecked && !isSafe ? 'border-red-500/45' : 'border-antiqueGold/20'}">
                   <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="font-bengali font-bold text-base">${escapeHtml(s.title)}</span>
                       <span class="font-bengali text-xs text-antiqueGold">— ${escapeHtml(s.pen_name)}</span>
                       ${s.whatsapp_number ? `<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono">WA: ${escapeHtml(s.whatsapp_number)}</span>` : ''}
                       <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-ivory">${escapeHtml(s.status)}</span>
+                      ${scoreBadge}
                     </div>
+
                     <div class="flex flex-wrap gap-2 text-xs font-bengali">
                       ${s.status === 'pending' ? `
-                        <button onclick="adminReviewSubmission('${s.id}', 'approved')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">অনুমোদন ও প্রকাশ</button>
-                        <button onclick="adminReviewSubmission('${s.id}', 'rejected')" class="px-3 py-1.5 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-red-200">বাতিল</button>
+                        <button id="plag-btn-${s.id}" onclick="adminCheckPlagiarism('${s.id}')" class="px-3 py-1.5 rounded-lg ${!isChecked ? 'bg-amber-500 text-midnight font-bold' : 'bg-amber-500/20 border border-amber-400/40 text-amber-200'} hover:opacity-90 flex items-center gap-1 transition">
+                          <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> ${!isChecked ? 'আগে Plagiarism Check করুন' : 'আবার চেক'}
+                        </button>
+
+                        ${isChecked && isSafe ? `
+                          <button onclick="adminReviewSubmission('${s.id}', 'approved')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> অনুমোদন ও প্রকাশ
+                          </button>
+                          <button onclick="toggleRejectBox('${s.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/25 hover:bg-red-500/45 text-red-200 transition">বাতিল</button>
+                        ` : ''}
+
+                        ${isChecked && !isSafe ? `
+                          <button onclick="toggleRejectBox('${s.id}')" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold flex items-center gap-1 transition">
+                            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> কারণসহ বাতিল করুন
+                          </button>
+                        ` : ''}
                       ` : ''}
+
                       ${s.status === 'approved' && s.whatsapp_number ? `
                         <button onclick="adminSendPublishWA('${s.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white flex items-center gap-1.5 transition">
                           <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp মেসেজ পাঠান
                         </button>
                       ` : ''}
-                      <!-- Action Buttons -->
-<button onclick="adminCheckPlagiarism('${s.id}')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500 hover:text-midnight flex items-center gap-1 text-xs transition">
-  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Plagiarism Check
-</button>
 
-<button onclick="toggleRejectBox('${s.id}')" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-400/40 text-red-200 hover:bg-red-600 hover:text-white flex items-center gap-1 text-xs transition">
-  <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> প্রত্যাখ্যান
-</button>
                       ${s.status === 'approved' ? `
-  <button onclick="downloadPoetCardFromSubmission('${s.id}')" class="px-3 py-1.5 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight flex items-center gap-1.5 transition">
-    <i data-lucide="award" class="w-3.5 h-3.5"></i> Poet Card
-  </button>
-` : ''}
+                        <button onclick="downloadPoetCardFromSubmission('${s.id}')" class="px-3 py-1.5 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight flex items-center gap-1.5 transition">
+                          <i data-lucide="award" class="w-3.5 h-3.5"></i> Poet Card
+                        </button>
+                      ` : ''}
+
+                      ${s.status === 'rejected' && s.whatsapp_number ? `
+                        <button onclick="adminSendRejectWA('${s.id}')" class="px-3 py-1.5 rounded-lg bg-red-600/25 border border-red-400/40 text-red-200 hover:bg-red-600 hover:text-white flex items-center gap-1.5 transition">
+                          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp-এ বাতিলের কারণ পাঠান
+                        </button>
+                      ` : ''}
                     </div>
                   </div>
+
                   <p class="font-bengali text-xs text-ivory/75 whitespace-pre-line">${escapeHtml(s.body)}</p>
+
+                  <!-- Plagiarism Report Details -->
+                  ${isChecked ? `
+                    <div class="mt-3 p-3 rounded-xl bg-deepPurple/35 border ${isSafe ? 'border-emerald-400/25' : 'border-red-400/35'} text-xs font-bengali space-y-1.5">
+                      <div class="font-semibold ${isSafe ? 'text-emerald-300' : 'text-red-300'}">প্লেজারিজম রিপোর্ট (স্কোর: ${score}%)</div>
+                      <div class="text-ivory/80 whitespace-pre-line">${escapeHtml(s.plagiarism_report || '')}</div>
+                      <div class="flex flex-wrap gap-1.5 pt-1">${buildGooglePlagLinks(s.body)}</div>
+                    </div>
+                  ` : ''}
+
+                  <!-- Saved Rejection Reason (if already rejected) -->
+                  ${s.status === 'rejected' && s.rejection_reason ? `
+                    <div class="mt-3 p-3 rounded-xl bg-red-950/45 border border-red-500/35 text-xs font-bengali text-red-200">
+                      <strong>বাতিলের কারণ:</strong> ${escapeHtml(s.rejection_reason)}
+                    </div>
+                  ` : ''}
+
+                  <!-- Inline Reject Reason Form -->
+                  <div id="reject-box-${s.id}" class="hidden mt-3 p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 space-y-2.5 font-bengali text-xs">
+                    <div class="font-semibold text-red-200">বাতিলের কারণ নির্বাচন করুন বা লিখুন:</div>
+                    <select id="rej-preset-${s.id}" class="w-full px-3 py-2 rounded-lg bg-midnight border border-red-400/30 text-ivory">
+                      <option value="লেখাটিতে কপি বা প্লেজারিজম ধরা পড়েছে (${score !== null ? score + '%' : 'উচ্চ মিল'})। শুধুমাত্র মৌলিক লেখা জমা দিন।" ${isChecked && !isSafe ? 'selected' : ''}>কপি / প্লেজারিজম ধরা পড়েছে</option>
+                      <option value="বানান ও ব্যাকরণগত ত্রুটি বেশি রয়েছে। সংশোধন করে পুনরায় জমা দিন।">বানান ও ব্যাকরণগত ত্রুটি বেশি</option>
+                      <option value="লেখাটি অসম্পূর্ণ বা প্রকাশযোগ্য মানের নয়।">লেখাটি অসম্পূর্ণ</option>
+                      <option value="লেখাটি KothaVerse-এর কমিউনিটি নীতিমালা বহির্ভূত।">নীতিমালা বহির্ভূত বিষয়বস্তু</option>
+                      <option value="CUSTOM">অন্যান্য (নিচে নিজের কারণ লিখুন)</option>
+                    </select>
+                    <textarea id="rej-note-${s.id}" rows="2" placeholder="অতিরিক্ত মন্তব্য বা নির্দিষ্ট কারণ লিখুন (ঐচ্ছিক)..." class="w-full px-3 py-2 rounded-lg bg-midnight border border-red-400/30 text-ivory"></textarea>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button onclick="adminRejectSubmission('${s.id}', true)" class="px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 flex items-center gap-1.5 transition">
+                        <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> বাতিল ও WhatsApp পাঠান
+                      </button>
+                      <button onclick="adminRejectSubmission('${s.id}', false)" class="px-3.5 py-1.5 rounded-lg bg-red-500/25 border border-red-400/40 text-red-200 hover:bg-red-500/40 transition">শুধু বাতিল করুন</button>
+                      <button onclick="toggleRejectBox('${s.id}')" class="px-3 py-1.5 rounded-lg bg-midnight border border-ivory/20 text-ivory/75">ফিরে যান</button>
+                    </div>
+                  </div>
                 </div>
-              `).join('') || '<p class="text-xs text-ivory/50 font-bengali">কোনো সাবমিশন নেই।</p>'}
+              `;
+              }).join('') || '<p class="text-xs text-ivory/50 font-bengali">কোনো সাবমিশন নেই।</p>'}
             </div>
 
             <h2 class="font-bengali text-xl font-bold text-red-400 mb-4">কমিউনিটি রিপোর্ট (Moderation)</h2>
@@ -3643,6 +3708,194 @@ async function adminSaveStory(e) {
       if (!sub) return;
       sendWhatsAppPublishMsg(sub.whatsapp_number, sub.pen_name, sub.title, slugify(sub.title));
     }
+    // =========================================================================
+// PLAGIARISM CHECKER + REJECT WITH REASON + WHATSAPP (wa.me)
+// =========================================================================
+function getTextShingles(text, size = 4) {
+  const words = String(text || '')
+    .toLowerCase()
+    .replace(/[^\u0980-\u09FFa-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const set = new Set();
+  if (words.length < size) {
+    if (words.length) set.add(words.join(' '));
+    return set;
+  }
+  for (let i = 0; i <= words.length - size; i++) {
+    set.add(words.slice(i, i + size).join(' '));
+  }
+  return set;
+}
+
+function calcSimilarityPercent(textA, textB) {
+  const a = getTextShingles(textA);
+  const b = getTextShingles(textB);
+  if (!a.size || !b.size) return 0;
+  let overlap = 0;
+  a.forEach((s) => { if (b.has(s)) overlap++; });
+  return Math.round((overlap / Math.min(a.size, b.size)) * 100);
+}
+
+function buildGooglePlagLinks(body) {
+  const lines = String(body || '')
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length >= 16)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 2);
+
+  if (!lines.length) return '';
+  return lines.map((line, i) => {
+    const q = encodeURIComponent(`"${line.slice(0, 85)}"`);
+    return `<a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" class="px-2 py-0.5 rounded bg-midnight border border-antiqueGold/30 text-antiqueGold hover:bg-antiqueGold hover:text-midnight transition">Google লাইন যাচাই #${i + 1} ↗</a>`;
+  }).join('');
+}
+
+async function adminCheckPlagiarism(subId) {
+  const s = (state.adminSubmissions || []).find((x) => x.id === subId);
+  if (!s) return;
+
+  const btn = document.getElementById(`plag-btn-${subId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'যাচাই চলছে...';
+  }
+
+  try {
+    // 1. Internal Database Similarity Check (Poems + Other Submissions)
+    let topMatch = { score: 0, title: '', type: '' };
+    (state.poems || []).forEach((p) => {
+      const sc = calcSimilarityPercent(s.body, p.content || p.body || '');
+      if (sc > topMatch.score) topMatch = { score: sc, title: p.title, type: 'প্রকাশিত কবিতা' };
+    });
+    (state.adminSubmissions || []).forEach((other) => {
+      if (other.id === s.id) return;
+      const sc = calcSimilarityPercent(s.body, other.body || '');
+      if (sc > topMatch.score) topMatch = { score: sc, title: other.title, type: 'অন্য সাবমিশন' };
+    });
+
+    let reportLines = [
+      topMatch.score > 0
+        ? `• সাইট ডাটাবেজ মিল: ${topMatch.score}% (${topMatch.type}: "${topMatch.title}")`
+        : '• সাইট ডাটাবেজ মিল: 0% (আগে প্রকাশিত কোনো লেখার সাথে মিল নেই)'
+    ];
+
+    // 2. Gemini AI Famous Poet / Plagiarism Risk Check (if API key configured)
+    let aiScore = 0;
+    if (typeof callOptionalGemini === 'function') {
+      const prompt = `Analyze this Bengali poem/writing for plagiarism (copied from Rabindranath, Nazrul, Jibanananda, Sukanta, Joy Goswami, Srijato, Sunil Gangopadhyay, Shankha Ghosh, or famous viral internet quotes).
+First line MUST be strictly: SCORE: <number from 0 to 100>
+Second line: Short Bengali explanation (1-2 sentences) mentioning the possible poet/source or confirming it looks original.
+
+Title: ${s.title}
+Text:
+${s.body}`;
+
+      const aiReply = await callOptionalGemini(prompt);
+      if (aiReply) {
+        const match = aiReply.match(/SCORE\s*:\s*(\d{1,3})/i);
+        if (match) aiScore = Math.min(100, Math.max(0, parseInt(match[1], 10)));
+        const cleanNote = aiReply.replace(/SCORE\s*:\s*\d{1,3}/i, '').trim();
+        reportLines.push(`• AI যাচাই (${aiScore}%): ${cleanNote || 'সম্পন্ন'}`);
+      } else {
+        reportLines.push('• AI যাচাই: Gemini API Key না থাকায় শুধু ডাটাবেজ চেক হয়েছে (Google লিংকে ম্যানুয়ালি দেখতে পারেন)।');
+      }
+    }
+
+    const finalScore = Math.max(topMatch.score, aiScore);
+    const reportText = reportLines.join('\n');
+
+    // 3. Save score & report to Supabase
+    const { error } = await sb
+      .from('user_submissions')
+      .update({
+        plagiarism_score: finalScore,
+        plagiarism_report: reportText
+      })
+      .eq('id', subId);
+
+    if (error) throw error;
+
+    showToast(
+      finalScore < 30
+        ? `Plagiarism চেক সম্পন্ন: ${finalScore}% (নিরাপদ — অনুমোদন বাটন আনলক হয়েছে)`
+        : `সতর্কতা! Plagiarism স্কোর ${finalScore}% (অনুমোদন ব্লক করা হয়েছে)`,
+      finalScore < 30 ? 'success' : 'error'
+    );
+
+    loadAdminTabData();
+  } catch (err) {
+    showToast('Plagiarism চেক ব্যর্থ: ' + err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'আবার চেষ্টা করুন';
+    }
+  }
+}
+
+function toggleRejectBox(subId) {
+  const el = document.getElementById(`reject-box-${subId}`);
+  if (el) el.classList.toggle('hidden');
+}
+
+function formatIndianWA(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length === 10 ? '91' + digits : digits;
+}
+
+function adminSendRejectWA(subId, overrideReason = '') {
+  const s = (state.adminSubmissions || []).find((x) => x.id === subId);
+  if (!s) return;
+
+  const waNum = formatIndianWA(s.whatsapp_number);
+  if (!waNum) {
+    return showToast('এই লেখকের WhatsApp নম্বর দেওয়া নেই।', 'error');
+  }
+
+  const reason = overrideReason || s.rejection_reason || 'সম্পাদকীয় নীতিমালা অনুযায়ী প্রকাশ করা সম্ভব হয়নি।';
+  const msg = `নমস্কার ${s.pen_name || 'লেখক'},\n\nKothaVerse-এ আপনার পাঠানো "${s.title}" লেখাটি পর্যালোচনা করা হয়েছে। দুঃখিত, এই মুহূর্তে লেখাটি প্রকাশ করা সম্ভব হলো না।\n\n*কারণ:* ${reason}\n\nআপনি লেখাটি সংশোধন করে অথবা নতুন মৌলিক লেখা আবারও KothaVerse-এ জমা দিতে পারেন।\n\nশুভেচ্ছান্তে,\nটিম KothaVerse`;
+
+  window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+async function adminRejectSubmission(subId, sendWaNow = false) {
+  const preset = document.getElementById(`rej-preset-${subId}`)?.value || '';
+  const customNote = (document.getElementById(`rej-note-${subId}`)?.value || '').trim();
+
+  let finalReason = preset === 'CUSTOM' ? customNote : preset;
+  if (preset !== 'CUSTOM' && customNote) {
+    finalReason = `${preset} (${customNote})`;
+  }
+  if (!finalReason) {
+    return showToast('দয়া করে বাতিলের একটি কারণ লিখুন।', 'error');
+  }
+
+  try {
+    const { error } = await sb
+      .from('user_submissions')
+      .update({
+        status: 'rejected',
+        rejection_reason: finalReason,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', subId);
+
+    if (error) throw error;
+
+    showToast('লেখাটি কারণসহ বাতিল করা হয়েছে।', 'success');
+
+    if (sendWaNow) {
+      adminSendRejectWA(subId, finalReason);
+    }
+
+    loadAdminTabData();
+  } catch (err) {
+    showToast('বাতিল করতে ত্রুটি হয়েছে: ' + err.message, 'error');
+  }
+}
 
     function handleSaveNewsletterSettings(e) {
       e.preventDefault();
