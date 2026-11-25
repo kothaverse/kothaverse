@@ -1,4 +1,4 @@
-
+ 
     // =========================================================================
     // 1. SUPABASE CONFIGURATION & INITIALIZATION
     // =========================================================================
@@ -1219,6 +1219,7 @@ async function adminSavePopup(e) {
       state.history = histRes.data || [];
       state.myEbookOrders = ebOrdRes.data || [];
       state.myVoiceOrders = vcOrdRes.data || [];
+      if (typeof loadPhase2UserData === 'function') await loadPhase2UserData();
     }
 
     async function loadAllPublicContent() {
@@ -1252,9 +1253,15 @@ async function adminSavePopup(e) {
         if (!siteSetRes.error && siteSetRes.data?.settings) {
           applyRemoteSettingsToLocal(siteSetRes.data.settings);
         }
+        
       } catch (err) {
         console.error('loadAllPublicContent failed:', err);
       }
+
+      if (typeof loadPhase2PublicData === 'function') await loadPhase2PublicData();
+      if (typeof loadPhase3PublicData === 'function') await loadPhase3PublicData();
+      if (typeof loadStoreSettingsFromDB === 'function') await loadStoreSettingsFromDB();
+
     }
 
     function renderAuthControls() {
@@ -1542,10 +1549,17 @@ window.addEventListener('hashchange', () => {
       const latestVideos = state.youtubeVideos.slice(0, 3);
       const quote = state.dailyQuote || DEMO_DATA.daily_quotes[0];
       const highlightPosts = state.communityPosts.slice(0, 2);
+      const flashHtml = typeof renderFlashSaleBanner === 'function' ? renderFlashSaleBanner() : '';
 
       return `
         <div class="fade-in">
-          <!-- Hero -->
+          <!-- Flash Sale Banner (Shudhu Active thaklei dekhabe) -->
+          ${flashHtml ? `
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 cursor-pointer" onclick="if (!event.target.closest('button')) navigate('store')">
+              ${flashHtml}
+            </div>
+          ` : ''}
+
           <section class="relative hero-glow pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 overflow-hidden">
             <div class="max-w-5xl mx-auto text-center relative z-10">
               <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel text-xs font-bengali text-antiqueGold mb-6">
@@ -3230,12 +3244,27 @@ async function refreshAdminBadges() {
             </div>
           `;
         } else if (t === 'store') {
-          const [ebRes, ebOrdRes, vcOrdRes] = await Promise.all([
+          const [ebRes, ebOrdRes, vcOrdRes, stSetRes] = await Promise.all([
             sb.from('ebooks').select('*').order('created_at', { ascending: false }),
             sb.from('ebook_orders').select('*, ebooks(title, price_inr)').order('created_at', { ascending: false }),
-            sb.from('voice_dedication_orders').select('*').order('created_at', { ascending: false })
+            sb.from('voice_dedication_orders').select('*').order('created_at', { ascending: false }),
+            sb.from('store_settings').select('*').eq('id', 1).maybeSingle()
           ]);
-          box.innerHTML = renderAdminStoreTab(ebRes.data || [], ebOrdRes.data || [], vcOrdRes.data || []);
+          state.ebooks = ebRes.data || [];
+          if (!stSetRes.error && stSetRes.data) {
+            state.storeSettings = stSetRes.data;
+          }
+          box.innerHTML = `
+            <div id="admin-upi-qr-controls"></div>
+            ${renderAdminStoreTab(state.ebooks, ebOrdRes.data || [], vcOrdRes.data || [])}
+            <div id="admin-phase1-controls"></div>
+            <div id="admin-phase2-controls"></div>
+            <div id="admin-phase3-controls"></div>
+          `;
+          loadAdminUpiQrManager('admin-upi-qr-controls');
+          await loadAdminPhase1Panel('admin-phase1-controls');
+          await loadAdminPhase2Panel('admin-phase2-controls');
+          await loadAdminPhase3Panel('admin-phase3-controls');
         } else if (t === 'users') {
           const { data: users, error } = await sb.rpc('get_admin_users');
           if (error) {
@@ -4806,6 +4835,7 @@ function downloadPoetCardFromSubmission(subId) {
 // =========================================================================
 // 18. E-BOOK STORE, WATERMARKED PDF ENGINE & CUSTOM VOICE DEDICATION
 // =========================================================================
+
 function renderStorePage() {
   const tab = state.storeTab || 'ebooks';
   const cfg = {
@@ -4821,17 +4851,28 @@ function renderStorePage() {
     ...(state.storeSettings || {})
   };
 
+  if (tab === 'voice') {
+    setTimeout(() => {
+      if (typeof recalcVoiceOrderTotal === 'function') recalcVoiceOrderTotal();
+    }, 60);
+  }
+
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 fade-in font-bengali">
+      ${typeof renderFlashSaleBanner === 'function' ? renderFlashSaleBanner() : ''}
+
       <div class="mb-8">
         <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">KothaVerse Store & Gifts</span>
         <h1 class="text-3xl sm:text-4xl font-bold mt-1">ই-বুক সংকলন ও কাস্টম ভয়েস গিফট</h1>
-        <p class="text-sm text-ivory/65 mt-2">কেনার জন্য আগে লগইন করুন। অ্যাপ্রুভ হলেই অ্যাপের ভেতরেই আপনার নামে ওয়াটারমার্কসহ PDF পড়তে ও ডাউনলোড করতে পারবেন।</p>
+        <p class="text-sm text-ivory/65 mt-2">কেনার জন্য আগে লগইন করুন। অ্যাপ্রুভ হলেই অ্যাপের ভেতরেই আপনার নামে ওয়াটারমার্কসহ PDF পড়তে ও ডাউনলোড করতে পারবেন।</p>
       </div>
 
       <div class="flex flex-wrap gap-3 mb-8 text-sm">
         <button onclick="state.storeTab='ebooks'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'ebooks' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">ই-বুক ও সংকলন (${state.ebooks.length})</button>
         <button onclick="state.storeTab='voice'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'voice' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">কাস্টম ভয়েস ডেডিকেশন</button>
+        <button onclick="state.storeTab='bundles'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'bundles' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">কম্বো প্যাক (${(window.kvPhase2?.bundles || []).length})</button>
+        <button onclick="state.storeTab='gift_wallet'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'gift_wallet' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">গিফট ও রেফারেল</button>
+        <button onclick="state.storeTab='my_orders'; renderCurrentRoute()" class="px-5 py-2.5 rounded-xl border transition ${tab === 'my_orders' ? 'bg-antiqueGold text-midnight border-antiqueGold font-semibold' : 'glass-panel border-antiqueGold/25'}">আমার অর্ডার ও ট্র্যাকিং</button>
       </div>
 
       ${tab === 'ebooks' ? `
@@ -4840,6 +4881,7 @@ function renderStorePage() {
             const myOrder = state.myEbookOrders.find((o) => o.ebook_id === b.id);
             const isApproved = myOrder?.status === 'approved';
             const isPending = myOrder?.status === 'pending';
+            const hasSample = Boolean(b.sample_pdf_url || b.sample_excerpt);
 
             return `
               <div class="glass-panel rounded-2xl overflow-hidden border border-antiqueGold/25 flex flex-col shadow-card">
@@ -4851,9 +4893,10 @@ function renderStorePage() {
                   <div>
                     <h3 class="text-xl font-bold text-ivory">${escapeHtml(b.title)}</h3>
                     <p class="text-xs text-antiqueGold mt-0.5">${escapeHtml(b.editor_name || 'KothaVerse সম্পাদনা')}</p>
+                    <div class="mt-2">${typeof renderProductRatingBadge === 'function' ? renderProductRatingBadge('ebook', b.id) : ''}</div>
                     <p class="text-xs text-ivory/70 mt-2 line-clamp-3 leading-relaxed">${escapeHtml(b.description || '')}</p>
                   </div>
-                  <div>
+                  <div class="space-y-2">
                     ${isApproved ? `
                       <div class="flex gap-2">
                         <button onclick="openWatermarkedEbook('${b.id}', 'view')" class="flex-1 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs flex items-center justify-center gap-1.5 shadow-gold">
@@ -4872,28 +4915,39 @@ function renderStorePage() {
                         কিনুন — ₹${b.price_inr}
                       </button>
                     `}
+                    ${cfg.gift_ebook_enabled !== false ? `
+                        <button onclick="openGiftEbookModal('${b.id}')" class="w-full py-2 rounded-xl bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                          <i data-lucide="gift" class="w-3.5 h-3.5"></i> প্রিয়জনকে গিফট করুন
+                        </button>
+                      ` : ''}
+
+                    ${hasSample && !isApproved ? `
+                      <button onclick="openEbookSamplePreview('${b.id}')" class="w-full py-2 rounded-xl bg-deepPurple/60 border border-antiqueGold/35 text-antiqueGold hover:bg-antiqueGold hover:text-midnight text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="eye" class="w-3.5 h-3.5"></i> ফ্রি স্যাম্পল প্রিভিউ পড়ুন
+                      </button>
+                    ` : ''}
                   </div>
                 </div>
               </div>
             `;
           }).join('') || `<div class="col-span-full glass-panel rounded-2xl p-10 text-center text-ivory/60 text-sm">এখনো কোনো ই-বুক প্রকাশিত হয়নি। খুব শীঘ্রই আসছে!</div>`}
         </div>
+      ` : tab === 'bundles' ? `
+        ${typeof renderStoreBundlesTab === 'function' ? renderStoreBundlesTab() : ''}
+      ` : tab === 'gift_wallet' ? `
+        ${typeof renderStoreGiftAndWalletTab === 'function' ? renderStoreGiftAndWalletTab() : ''}
+      ` : tab === 'my_orders' ? `
+        ${typeof renderStoreMyOrdersTab === 'function' ? renderStoreMyOrdersTab() : ''}
       ` : `
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2 glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30">
             <h2 class="text-2xl font-bold text-antiqueGold mb-2">প্রিয়জনের নামে কাস্টম ভয়েস ডেডিকেশন</h2>
+            <div class="mb-3">${typeof renderProductRatingBadge === 'function' ? renderProductRatingBadge('voice', 'voice_dedication') : ''}</div>
             <p class="text-xs text-ivory/70 mb-5">জন্মদিন, অ্যানিভার্সারি বা বিশেষ দিনে আমাদের কণ্ঠশিল্পীদের কণ্ঠে প্রিয়জনের নাম নিয়ে আবৃত্তি ও ব্যাকগ্রাউন্ড মিউজিকসহ স্পেশাল অডিও গিফট।</p>
 
-            <div class="p-4 rounded-2xl bg-deepPurple/45 border border-antiqueGold/25 text-xs mb-5 flex flex-wrap items-center justify-between gap-4">
-  <div class="space-y-1">
-    <div class="text-antiqueGold font-semibold">UPI পেমেন্ট তথ্য (${escapeHtml(cfg.upi_name)})</div>
-    <div>UPI ID: <strong class="font-mono text-ivory">${escapeHtml(cfg.upi_id)}</strong>
-      <button type="button" onclick="copyTextToClipboard('${escapeHtml(cfg.upi_id)}')" class="ml-2 px-2 py-0.5 rounded bg-midnight text-antiqueGold text-[10px]">কপি</button>
-    </div>
-    <div class="text-ivory/65">পেমেন্ট করে নিচে Transaction ID দিন।</div>
-  </div>
-  ${cfg.qr_image_url ? `<img src="${escapeHtml(cfg.qr_image_url)}" alt="UPI QR" class="w-24 h-24 rounded-xl border border-antiqueGold/40 bg-white p-1 object-contain" />` : ''}
-</div>
+            ${typeof renderVoiceDemoCard === 'function' ? renderVoiceDemoCard() : ''}
+
+            
 
             <form onsubmit="handleVoiceOrderSubmit(event)" class="space-y-4 text-sm">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4901,19 +4955,22 @@ function renderStorePage() {
                 <input id="vo-receiver" required placeholder="প্রিয়জনের নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <select id="vo-package" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25">
-  <option value="${escapeHtml(cfg.voice_pkg_1_name)}|${cfg.voice_pkg_1_price}">${escapeHtml(cfg.voice_pkg_1_name)} — ₹${cfg.voice_pkg_1_price}</option>
-  <option value="${escapeHtml(cfg.voice_pkg_2_name)}|${cfg.voice_pkg_2_price}" selected>${escapeHtml(cfg.voice_pkg_2_name)} — ₹${cfg.voice_pkg_2_price}</option>
-  <option value="${escapeHtml(cfg.voice_pkg_3_name)}|${cfg.voice_pkg_3_price}">${escapeHtml(cfg.voice_pkg_3_name)} — ₹${cfg.voice_pkg_3_price}</option>
-</select>
+                <select id="vo-package" onchange="recalcVoiceOrderTotal()" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25">
+                  <option value="${escapeHtml(cfg.voice_pkg_1_name)}|${cfg.voice_pkg_1_price}">${escapeHtml(cfg.voice_pkg_1_name)} — ₹${cfg.voice_pkg_1_price}</option>
+                  <option value="${escapeHtml(cfg.voice_pkg_2_name)}|${cfg.voice_pkg_2_price}" selected>${escapeHtml(cfg.voice_pkg_2_name)} — ₹${cfg.voice_pkg_2_price}</option>
+                  <option value="${escapeHtml(cfg.voice_pkg_3_name)}|${cfg.voice_pkg_3_price}">${escapeHtml(cfg.voice_pkg_3_name)} — ₹${cfg.voice_pkg_3_price}</option>
+                </select>
                 <input id="vo-occasion" required placeholder="উপলক্ষ (যেমন: জন্মদিন / বার্ষিকী)*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input id="vo-whatsapp" required type="tel" placeholder="আপনার WhatsApp নম্বর*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-                <input id="vo-txn" required placeholder="UPI Transaction ID*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 font-mono" />
+                
               </div>
               <textarea id="vo-script" rows="4" required placeholder="যে কবিতা বা বার্তাটি রেকর্ড করাতে চান তা এখানে লিখুন..." class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25"></textarea>
-              <button type="submit" class="px-7 py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">অর্ডার জমা দিন</button>
+
+              ${typeof renderVoiceAddonsAndCouponUI === 'function' ? renderVoiceAddonsAndCouponUI() : ''}
+
+              <button type="submit" class="px-7 py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">পেমেন্ট করতে এগিয়ে যান →</button>
             </form>
           </div>
 
@@ -4928,7 +4985,10 @@ function renderStorePage() {
                   <strong class="text-ivory">${escapeHtml(o.receiver_name)} (${escapeHtml(o.occasion)})</strong>
                   <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-antiqueGold">${escapeHtml(o.status)}</span>
                 </div>
-                <div class="text-ivory/60">${escapeHtml(o.package_name)} • ₹${o.amount_inr}</div>
+                <div class="text-ivory/60">${escapeHtml(o.package_name)} • ₹${o.final_amount_inr ?? o.amount_inr}${o.coupon_code ? ` <span class="text-emerald-300 font-mono">(${escapeHtml(o.coupon_code)})</span>` : ''}</div>
+                ${Array.isArray(o.selected_addons) && o.selected_addons.length ? `
+                  <div class="text-[11px] text-antiqueGold/85">Add-ons: ${o.selected_addons.map((a) => escapeHtml(a.name)).join(', ')}</div>
+                ` : ''}
                 ${o.delivery_audio_url ? `
                   <button onclick="audioEngine.loadAndPlay({id:'${o.id}',type:'recitation',title:'Gift for ${escapeHtml(o.receiver_name)}',subtitle:'KothaVerse Custom Voice',cover:'',url:'${escapeHtml(o.delivery_audio_url)}',duration:150})" class="w-full py-2 rounded-xl bg-emerald-600 text-white font-semibold">▶ অডিও শুনুন</button>
                 ` : `<div class="text-[11px] text-amber-300">রেকর্ডিং প্রক্রিয়াধীন আছে...</div>`}
@@ -4951,13 +5011,48 @@ function openEbookOrderModal(ebookId) {
   if (!book) return;
 
   const cfg = state.storeSettings || {};
+  const baseAmt = Number(book.price_inr || 0);
+
+  window.kvCheckout.ebook = {
+    basePrice: baseAmt,
+    couponCode: '',
+    couponDiscount: 0,
+    refCode: '',
+    refDiscount: 0,
+    walletUsed: 0,
+    discount: 0,
+    finalPrice: baseAmt
+  };
+
   document.getElementById('eo-ebook-id').value = book.id;
-  document.getElementById('eo-book-label').textContent = `${book.title} — ₹${book.price_inr}`;
+  document.getElementById('eo-book-label').textContent = `${book.title} — ₹${baseAmt}`;
   document.getElementById('eo-upi-id').textContent = cfg.upi_id || 'kothaverse@upi';
-  document.getElementById('eo-price').textContent = `₹${book.price_inr}`;
+  document.getElementById('eo-price').textContent = `₹${baseAmt}`;
   document.getElementById('eo-name').value = state.profile?.full_name || '';
   document.getElementById('eo-whatsapp').value = '';
-  document.getElementById('eo-txn').value = '';
+  
+
+  ['eo-coupon-input', 'eo-ref-input'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['eo-coupon-msg', 'eo-ref-msg'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = ''; });
+
+  // Show/Hide Referral & Wallet boxes based on Admin settings & user balance
+  const refWrap = document.getElementById('eo-ref-wrap');
+  if (refWrap) refWrap.classList.toggle('hidden', cfg.referral_enabled === false);
+
+  const walletBal = Number(window.kvPhase2?.walletBalance || 0);
+  const wWrap = document.getElementById('eo-wallet-wrap');
+  const wChk = document.getElementById('eo-use-wallet');
+  const wBalEl = document.getElementById('eo-wallet-bal');
+  if (wChk) wChk.checked = false;
+  if (wBalEl) wBalEl.textContent = `₹${walletBal}`;
+  if (wWrap) wWrap.classList.toggle('hidden', walletBal <= 0);
+  const eoQrWrap = document.getElementById('eo-qr-wrap');
+  const eoQrImg = document.getElementById('eo-qr-img');
+  if (eoQrWrap && eoQrImg) {
+    if (cfg.qr_image_url) { eoQrImg.src = cfg.qr_image_url; eoQrWrap.classList.remove('hidden'); }
+    else { eoQrWrap.classList.add('hidden'); }
+  }
+
   openModal('ebook-order-modal');
 }
 
@@ -4965,23 +5060,54 @@ async function handleEbookOrderSubmit(e) {
   e.preventDefault();
   if (!state.user) return openAuthModal('login');
 
-  const payload = {
-    user_id: state.user.id,
-    ebook_id: document.getElementById('eo-ebook-id').value,
-    buyer_name: document.getElementById('eo-name').value.trim(),
-    buyer_email: state.user.email,
-    whatsapp_number: document.getElementById('eo-whatsapp').value.trim(),
-    transaction_id: document.getElementById('eo-txn').value.trim(),
-    status: 'pending'
-  };
-
-  const { error } = await sb.from('ebook_orders').insert(payload);
-  if (error) return showToast('অর্ডার জমা ব্যর্থ: ' + error.message, 'error');
+  const ebookId = document.getElementById('eo-ebook-id').value;
+  const buyerName = document.getElementById('eo-name').value.trim();
+  const whatsapp = document.getElementById('eo-whatsapp').value.trim();
+  const ebCheckout = { ...(window.kvCheckout?.ebook || {}) };
+  const book = state.ebooks.find((x) => x.id === ebookId);
+  const finalAmount = ebCheckout.finalPrice ?? Number(book?.price_inr || 0);
 
   closeModal('ebook-order-modal');
-  showToast('অর্ডার জমা হয়েছে! অ্যাপ্রুভ হলেই অ্যাপে PDF আনলক হবে।', 'success');
-  await loadUserPersonalData();
-  renderCurrentRoute();
+
+  openUpiGatewayPopup({
+    title: book?.title || 'KothaVerse E-Book',
+    subtitle: 'ই-বুক অর্ডার পেমেন্ট',
+    amount: finalAmount,
+    note: `Ebook: ${book?.title || 'KothaVerse'}`,
+    onSuccess: async (utr) => {
+      if (ebCheckout.walletUsed > 0) {
+        const { data: wRes, error: wErr } = await sb.rpc('deduct_my_wallet', {
+          p_amount: ebCheckout.walletUsed,
+          p_note: `${book?.title || 'ই-বুক'} অর্ডারে ব্যবহৃত`
+        });
+        if (wErr || !wRes?.ok) throw new Error(wRes?.msg || 'ওয়ালেট ব্যালেন্স কাটতে ব্যর্থ।');
+      }
+
+      const { error } = await sb.from('ebook_orders').insert({
+        user_id: state.user.id,
+        ebook_id: ebookId,
+        buyer_name: buyerName,
+        buyer_email: state.user.email,
+        whatsapp_number: whatsapp,
+        transaction_id: utr,
+        coupon_code: ebCheckout.couponCode || '',
+        referral_code_used: ebCheckout.refCode || '',
+        wallet_used_inr: Number(ebCheckout.walletUsed || 0),
+        discount_inr: Number(ebCheckout.discount || 0),
+        final_amount_inr: finalAmount,
+        status: 'pending'
+      });
+
+      if (error) throw error;
+
+      if (ebCheckout.couponCode) {
+        await sb.rpc('increment_coupon_usage', { p_code: ebCheckout.couponCode });
+      }
+
+      await loadUserPersonalData();
+      renderCurrentRoute();
+    }
+  });
 }
 
 async function handleVoiceOrderSubmit(e) {
@@ -4990,8 +5116,18 @@ async function handleVoiceOrderSubmit(e) {
     showToast('অর্ডার করার জন্য আগে লগইন করুন।', 'info');
     return openAuthModal('login');
   }
+
+  if (typeof recalcVoiceOrderTotal === 'function') {
+    await recalcVoiceOrderTotal();
+  }
+
+  const formEl = e.target;
   const [pkgName, amtStr] = document.getElementById('vo-package').value.split('|');
-  const payload = {
+  const baseAmt = parseInt(amtStr, 10) || 149;
+  const vcCheckout = { ...(window.kvCheckout?.voice || {}) };
+  const finalAmount = vcCheckout.finalPrice ?? baseAmt;
+
+  const orderDraft = {
     user_id: state.user.id,
     sender_name: document.getElementById('vo-sender').value.trim(),
     receiver_name: document.getElementById('vo-receiver').value.trim(),
@@ -4999,18 +5135,40 @@ async function handleVoiceOrderSubmit(e) {
     whatsapp_number: document.getElementById('vo-whatsapp').value.trim(),
     script_or_poem: document.getElementById('vo-script').value.trim(),
     package_name: pkgName,
-    amount_inr: parseInt(amtStr, 10) || 149,
-    transaction_id: document.getElementById('vo-txn').value.trim(),
-    status: 'pending'
+    amount_inr: baseAmt,
+    selected_addons: vcCheckout.addons || [],
+    addons_total_inr: Number(vcCheckout.addonsTotal || 0),
+    coupon_code: vcCheckout.couponCode || '',
+    discount_inr: Number(vcCheckout.discount || 0),
+    final_amount_inr: finalAmount
   };
 
-  const { error } = await sb.from('voice_dedication_orders').insert(payload);
-  if (error) return showToast('অর্ডার ব্যর্থ: ' + error.message, 'error');
+  openUpiGatewayPopup({
+    title: `কাস্টম ভয়েস গিফট (${orderDraft.receiver_name})`,
+    subtitle: pkgName,
+    amount: finalAmount,
+    note: `Voice Gift for ${orderDraft.receiver_name}`,
+    onSuccess: async (utr) => {
+      const { error } = await sb.from('voice_dedication_orders').insert({
+        ...orderDraft,
+        transaction_id: utr,
+        status: 'pending'
+      });
+      if (error) throw error;
 
-  e.target.reset();
-  showToast('ভয়েস ডেডিকেশন অর্ডার সফলভাবে জমা হয়েছে!', 'success');
-  await loadUserPersonalData();
-  renderCurrentRoute();
+      if (orderDraft.coupon_code) {
+        await sb.rpc('increment_coupon_usage', { p_code: orderDraft.coupon_code });
+      }
+
+      if (window.kvCheckout) {
+        window.kvCheckout.voice = { basePrice: 0, addons: [], addonsTotal: 0, couponCode: '', discount: 0, finalPrice: 0 };
+      }
+
+      formEl.reset();
+      await loadUserPersonalData();
+      renderCurrentRoute();
+    }
+  });
 }
 
 // =========================================================================
@@ -5388,6 +5546,3187 @@ async function syncSettingsToSupabase(showSuccess = false) {
   if (error) {
     showToast('Global settings sync ব্যর্থ: ' + error.message, 'error');
   }
+}
+// =========================================================================
+// PHASE 1: ADMIN-CONTROLLED COUPONS, FLASH SALE, VOICE ADD-ONS & PREVIEWS
+// =========================================================================
+const DEFAULT_VOICE_ADDONS = [
+  { id: 'urgent_12h', name: 'Urgent 12-Hour Delivery', price: 50, enabled: true },
+  { id: 'video_reel', name: 'Custom Video Reel Version', price: 100, enabled: true },
+  { id: 'digital_card', name: 'Handwritten-Style Digital Card', price: 30, enabled: true }
+];
+
+window.kvCheckout = {
+  ebook: { basePrice: 0, couponCode: '', discount: 0, finalPrice: 0 },
+  voice: { basePrice: 0, addons: [], addonsTotal: 0, couponCode: '', discount: 0, finalPrice: 0 }
+};
+
+let _flashSaleTimerId = null;
+
+function getActiveVoiceAddons() {
+  const list = Array.isArray(state.storeSettings?.voice_addons)
+    ? state.storeSettings.voice_addons
+    : DEFAULT_VOICE_ADDONS;
+  return list.filter((a) => a && a.enabled);
+}
+
+// -------------------------------------------------------------------------
+// 1. FLASH SALE COUNTDOWN BANNER (Homepage + Store Page)
+// -------------------------------------------------------------------------
+function renderFlashSaleBanner() {
+  const cfg = state.storeSettings || {};
+  if (!cfg.flash_sale_active || !cfg.flash_sale_end) return '';
+
+  const endMs = new Date(cfg.flash_sale_end).getTime();
+  if (isNaN(endMs) || endMs <= Date.now()) return '';
+
+  setTimeout(() => startFlashSaleTicker(endMs), 50);
+
+  return `
+    <div id="kv-flash-banner" class="mb-6 rounded-2xl p-4 sm:p-5 border border-antiqueGold/50 bg-gradient-to-r from-red-950/75 via-deepPurple/85 to-amber-950/70 shadow-gold font-bengali">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold tracking-wide uppercase">
+            <i data-lucide="zap" class="w-3 h-3"></i> Flash Sale Live
+          </div>
+          <h3 class="text-lg sm:text-xl font-bold text-antiqueGold">${escapeHtml(cfg.flash_sale_title || 'উৎসবের বিশেষ ফ্ল্যাশ সেল!')}</h3>
+          <p class="text-xs text-ivory/80">${escapeHtml(cfg.flash_sale_subtitle || '')}</p>
+          ${cfg.flash_sale_coupon ? `
+            <div class="pt-1 flex items-center gap-2 text-xs">
+              <span class="text-ivory/75">কুপন কোড:</span>
+              <button onclick="navigator.clipboard?.writeText('${escapeHtml(cfg.flash_sale_coupon)}'); showToast('কুপন কোড কপি হয়েছে!', 'success')" class="px-2.5 py-0.5 rounded-lg bg-antiqueGold text-midnight font-mono font-bold hover:opacity-90">
+                ${escapeHtml(cfg.flash_sale_coupon)} (কপি)
+              </button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="shrink-0 flex flex-col items-start md:items-end gap-1">
+          <span class="text-[11px] text-ivory/70">অফার শেষ হতে বাকি:</span>
+          <div id="kv-flash-timer" class="font-mono text-lg sm:text-2xl font-bold text-white bg-midnight/80 border border-antiqueGold/40 px-4 py-2 rounded-xl tracking-wider">
+            --:--:--
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function startFlashSaleTicker(endMs) {
+  if (_flashSaleTimerId) clearInterval(_flashSaleTimerId);
+
+  const update = () => {
+    const el = document.getElementById('kv-flash-timer');
+    const wrap = document.getElementById('kv-flash-banner');
+    if (!el) return clearInterval(_flashSaleTimerId);
+
+    const diff = endMs - Date.now();
+    if (diff <= 0) {
+      clearInterval(_flashSaleTimerId);
+      if (wrap) wrap.remove();
+      return;
+    }
+
+    const days = Math.floor(diff / 86400000);
+    const hrs = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+
+    el.textContent = days > 0
+      ? `${days}d : ${pad(hrs)}h : ${pad(mins)}m : ${pad(secs)}s`
+      : `${pad(hrs)} : ${pad(mins)} : ${pad(secs)}`;
+  };
+
+  update();
+  _flashSaleTimerId = setInterval(update, 1000);
+}
+
+// -------------------------------------------------------------------------
+// 2. COUPON VALIDATION ENGINE (E-Book & Voice Checkout)
+// -------------------------------------------------------------------------
+async function validateAndCalcCoupon(rawCode, targetType, orderSubtotal) {
+  const code = String(rawCode || '').trim().toUpperCase();
+  if (!code) return { ok: false, msg: 'একটি কুপন কোড লিখুন।' };
+
+  const { data, error } = await sb
+    .from('store_coupons')
+    .select('*')
+    .eq('code', code)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error || !data) return { ok: false, msg: 'কুপন কোডটি সঠিক নয় বা বন্ধ করা আছে।' };
+  if (data.applies_to !== 'all' && data.applies_to !== targetType) {
+    return { ok: false, msg: `এই কুপনটি শুধুমাত্র ${data.applies_to === 'ebook' ? 'ই-বুকের' : 'ভয়েস গিফটের'} জন্য প্রযোজ্য।` };
+  }
+  if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
+    return { ok: false, msg: 'এই কুপন কোডটির মেয়াদ শেষ হয়ে গেছে।' };
+  }
+  if (data.max_uses > 0 && data.used_count >= data.max_uses) {
+    return { ok: false, msg: 'এই কুপনের ব্যবহারের সীমা শেষ হয়ে গেছে।' };
+  }
+  if (orderSubtotal < (data.min_order_inr || 0)) {
+    return { ok: false, msg: `এই কুপন ব্যবহার করতে কমপক্ষে ₹${data.min_order_inr} অর্ডার করতে হবে।` };
+  }
+
+  let discount = data.discount_type === 'percent'
+    ? Math.round((orderSubtotal * data.discount_value) / 100)
+    : Number(data.discount_value || 0);
+
+  discount = Math.min(orderSubtotal, Math.max(0, discount));
+  const finalPrice = Math.max(0, orderSubtotal - discount);
+
+  return {
+    ok: true,
+    code: data.code,
+    discount,
+    finalPrice,
+    msg: `কুপন "${data.code}" প্রয়োগ হয়েছে! আপনি ₹${discount} ছাড় পেলেন।`
+  };
+}
+
+// E-Book Modal Coupon Apply
+async function applyEbookCoupon() {
+  const input = document.getElementById('eo-coupon-input');
+  const msgEl = document.getElementById('eo-coupon-msg');
+  if (!input || !msgEl) return;
+
+  const c = window.kvCheckout.ebook;
+  const res = await validateAndCalcCoupon(input.value, 'ebook', Number(c.basePrice || 0));
+
+  if (!res.ok) {
+    c.couponCode = '';
+    c.couponDiscount = 0;
+    msgEl.className = 'text-[11px] text-red-400 font-bengali mt-1';
+    msgEl.textContent = res.msg;
+    return recalcEbookCheckoutTotal();
+  }
+
+  c.couponCode = res.code;
+  c.couponDiscount = res.discount;
+  msgEl.className = 'text-[11px] text-emerald-400 font-bengali mt-1';
+  msgEl.textContent = res.msg;
+  recalcEbookCheckoutTotal();
+}
+
+// -------------------------------------------------------------------------
+// 3. VOICE DEMO AUDIO PLAYER + ADD-ONS + LIVE PRICE CALCULATOR
+// -------------------------------------------------------------------------
+function renderVoiceDemoCard() {
+  const cfg = state.storeSettings || {};
+  if (!cfg.voice_demo_audio_url) return '';
+
+  return `
+    <div class="mb-5 p-4 rounded-2xl bg-deepPurple/45 border border-antiqueGold/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-bengali">
+      <div class="space-y-0.5">
+        <div class="text-xs font-bold text-antiqueGold flex items-center gap-1.5">
+          <i data-lucide="headphones" class="w-4 h-4"></i> ফ্রি স্যাম্পল শুনুন
+        </div>
+        <div class="text-xs text-ivory/80">${escapeHtml(cfg.voice_demo_title || 'কাস্টম ভয়েস ডেডিকেশন স্যাম্পল (২০ সেকেন্ড)')}</div>
+      </div>
+      <audio controls preload="metadata" class="h-9 w-full sm:w-64 rounded-lg" src="${escapeHtml(cfg.voice_demo_audio_url)}"></audio>
+    </div>
+  `;
+}
+
+function renderVoiceAddonsAndCouponUI() {
+  const addons = getActiveVoiceAddons();
+  return `
+    ${addons.length ? `
+      <div class="p-3.5 rounded-xl bg-midnight/60 border border-antiqueGold/20 space-y-2 font-bengali">
+        <div class="text-xs font-semibold text-antiqueGold">স্পেশাল অ্যাড-অন যোগ করুন (ঐচ্ছিক):</div>
+        <div id="vc-addons-wrap" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          ${addons.map((a) => `
+            <label class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-deepPurple/35 border border-antiqueGold/20 cursor-pointer hover:border-antiqueGold/50 text-xs">
+              <span class="flex items-center gap-2">
+                <input type="checkbox" class="vc-addon-chk accent-amber-400" value="${escapeHtml(a.id)}" data-name="${escapeHtml(a.name)}" data-price="${Number(a.price || 0)}" onchange="recalcVoiceOrderTotal()" />
+                <span class="text-ivory/90">${escapeHtml(a.name)}</span>
+              </span>
+              <span class="font-mono text-antiqueGold font-semibold">+₹${Number(a.price || 0)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <div class="p-3.5 rounded-xl bg-midnight/60 border border-antiqueGold/20 space-y-2 font-bengali">
+      <div class="flex gap-2">
+        <input id="vc-coupon-input" type="text" placeholder="কুপন কোড থাকলে লিখুন (যেমন: PUJO20)" class="flex-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-xs text-ivory uppercase" />
+        <button type="button" onclick="applyVoiceCoupon()" class="px-4 py-2 rounded-xl bg-antiqueGold/20 border border-antiqueGold/45 text-antiqueGold hover:bg-antiqueGold hover:text-midnight text-xs font-semibold transition">প্রয়োগ করুন</button>
+      </div>
+      <div id="vc-coupon-msg" class="text-[11px]"></div>
+      <div id="vc-final-price-box" class="pt-1.5 border-t border-ivory/10 text-xs text-ivory/90 flex flex-wrap items-center justify-between gap-2">
+        <span>সর্বমোট প্রদেয় (UPI):</span>
+        <strong class="text-base text-antiqueGold font-mono">₹0</strong>
+      </div>
+    </div>
+  `;
+}
+
+function getSelectedVoiceBasePrice() {
+  const sel = document.getElementById('vo-package');
+  if (!sel || !sel.value) return 0;
+  const parts = sel.value.split('|');
+  return parseInt(parts[1], 10) || 0;
+}
+
+async function recalcVoiceOrderTotal(recheckCoupon = false) {
+  const basePrice = getSelectedVoiceBasePrice();
+  const checked = Array.from(document.querySelectorAll('.vc-addon-chk:checked'));
+  const addons = checked.map((el) => ({
+    id: el.value,
+    name: el.dataset.name,
+    price: Number(el.dataset.price || 0)
+  }));
+  const addonsTotal = addons.reduce((sum, a) => sum + a.price, 0);
+  const subtotal = basePrice + addonsTotal;
+
+  let couponCode = window.kvCheckout.voice.couponCode || '';
+  let discount = 0;
+
+  if (couponCode) {
+    const res = await validateAndCalcCoupon(couponCode, 'voice', subtotal);
+    const msgEl = document.getElementById('vc-coupon-msg');
+    if (res.ok) {
+      discount = res.discount;
+      if (recheckCoupon && msgEl) {
+        msgEl.className = 'text-[11px] text-emerald-400 font-bengali';
+        msgEl.textContent = res.msg;
+      }
+    } else {
+      couponCode = '';
+      if (msgEl) {
+        msgEl.className = 'text-[11px] text-red-400 font-bengali';
+        msgEl.textContent = res.msg;
+      }
+    }
+  }
+
+  const finalPrice = Math.max(0, subtotal - discount);
+  window.kvCheckout.voice = { basePrice, addons, addonsTotal, couponCode, discount, finalPrice };
+
+  const box = document.getElementById('vc-final-price-box');
+  if (box) {
+    const breakdown = [];
+    if (addonsTotal > 0) breakdown.push(`প্যাকেজ ₹${basePrice} + অ্যাড-অন ₹${addonsTotal}`);
+    if (discount > 0) breakdown.push(`ছাড় -₹${discount}`);
+    box.innerHTML = `
+      <span>সর্বমোট প্রদেয় (UPI) ${breakdown.length ? `<span class="text-ivory/60">(${breakdown.join(' | ')})</span>` : ''}:</span>
+      <strong class="text-base text-antiqueGold font-mono">₹${finalPrice}</strong>
+    `;
+  }
+}
+
+async function applyVoiceCoupon() {
+  const input = document.getElementById('vc-coupon-input');
+  if (!input) return;
+  window.kvCheckout.voice.couponCode = input.value.trim().toUpperCase();
+  await recalcVoiceOrderTotal(true);
+}
+
+// -------------------------------------------------------------------------
+// 4. FREE E-BOOK SAMPLE PREVIEW MODAL (Prothom 2-3 Pata via pdf-lib / Excerpt)
+// -------------------------------------------------------------------------
+async function openEbookSamplePreview(ebookId) {
+  const book = (state.ebooks || []).find((x) => x.id === ebookId);
+  if (!book) return;
+
+  let modal = document.getElementById('kv-sample-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-sample-modal';
+    modal.className = 'fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4';
+    document.body.appendChild(modal);
+  }
+
+  const maxPages = Number(book.sample_pages || 3);
+  modal.innerHTML = `
+    <div class="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl bg-midnight border border-antiqueGold/40 overflow-hidden shadow-card font-bengali">
+      <div class="px-5 py-4 border-b border-antiqueGold/20 flex items-center justify-between gap-3 bg-deepPurple/40">
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-antiqueGold font-semibold">ফ্রি স্যাম্পল প্রিভিউ (প্রথম ${maxPages} পাতা)</span>
+          <h3 class="text-base sm:text-lg font-bold text-ivory">${escapeHtml(book.title)}</h3>
+        </div>
+        <button onclick="closeEbookSamplePreview()" class="px-3 py-1.5 rounded-xl bg-midnight border border-ivory/20 text-xs text-ivory/80 hover:text-white">বন্ধ করুন ✕</button>
+      </div>
+      <div id="kv-sample-body" class="p-5 overflow-y-auto flex-1 space-y-4">
+        <div class="text-center text-xs text-ivory/70 py-6">স্যাম্পল লোড হচ্ছে...</div>
+      </div>
+      <div class="px-5 py-3.5 border-t border-antiqueGold/20 bg-deepPurple/30 flex items-center justify-between gap-3">
+        <span class="text-xs text-ivory/75">সম্পূর্ণ বইটি পড়তে চান? মূল্য মাত্র <strong class="text-antiqueGold">₹${book.price_inr}</strong></span>
+        <button onclick="closeEbookSamplePreview(); openEbookOrderModal('${book.id}')" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">এখনই কিনুন</button>
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  const bodyEl = document.getElementById('kv-sample-body');
+  let htmlParts = [];
+
+  if (book.sample_excerpt) {
+    htmlParts.push(`
+      <div class="p-4 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 text-sm text-ivory/90 whitespace-pre-line leading-relaxed">
+        ${escapeHtml(book.sample_excerpt)}
+      </div>
+    `);
+  }
+
+  if (book.sample_pdf_url) {
+    try {
+      let previewUrl = book.sample_pdf_url;
+
+      // pdf-lib diye shudhu prothom N pata slice kore browser-e dekhano
+      if (window.PDFLib && maxPages > 0) {
+        const resp = await fetch(book.sample_pdf_url);
+        if (resp.ok) {
+          const bytes = await resp.arrayBuffer();
+          const srcPdf = await window.PDFLib.PDFDocument.load(bytes);
+          const outPdf = await window.PDFLib.PDFDocument.create();
+          const count = Math.min(maxPages, srcPdf.getPageCount());
+          const copied = await outPdf.copyPages(srcPdf, Array.from({ length: count }, (_, i) => i));
+          copied.forEach((p) => outPdf.addPage(p));
+          const slicedBytes = await outPdf.save();
+          const blob = new Blob([slicedBytes], { type: 'application/pdf' });
+          previewUrl = URL.createObjectURL(blob);
+          modal.dataset.blobUrl = previewUrl;
+        }
+      }
+
+      htmlParts.push(`
+        <iframe src="${previewUrl}#toolbar=0" class="w-full h-[55vh] rounded-xl border border-antiqueGold/25 bg-white"></iframe>
+      `);
+    } catch (e) {
+      htmlParts.push(`<a href="${escapeHtml(book.sample_pdf_url)}" target="_blank" rel="noopener" class="inline-block px-4 py-2 rounded-xl bg-antiqueGold/20 text-antiqueGold text-xs">স্যাম্পল PDF খুলুন ↗</a>`);
+    }
+  }
+
+  bodyEl.innerHTML = htmlParts.length
+    ? htmlParts.join('')
+    : '<p class="text-xs text-ivory/60 text-center py-6">এই বইটির জন্য কোনো স্যাম্পল প্রিভিউ এখনও যোগ করা হয়নি।</p>';
+}
+
+function closeEbookSamplePreview() {
+  const modal = document.getElementById('kv-sample-modal');
+  if (!modal) return;
+  if (modal.dataset.blobUrl) {
+    URL.revokeObjectURL(modal.dataset.blobUrl);
+    delete modal.dataset.blobUrl;
+  }
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+// -------------------------------------------------------------------------
+// 5. ADMIN CONTROL PANEL (Flash Sale, Coupons, Voice Add-ons & Sample Preview)
+// -------------------------------------------------------------------------
+async function loadAdminPhase1Panel(containerId = 'admin-phase1-controls') {
+  const box = document.getElementById(containerId);
+  if (!box || state.profile?.role !== 'admin') return;
+
+  const cfg = state.storeSettings || {};
+  const addons = Array.isArray(cfg.voice_addons) ? cfg.voice_addons : [...DEFAULT_VOICE_ADDONS];
+  window._adminDraftAddons = JSON.parse(JSON.stringify(addons));
+
+  const { data: coupons } = await sb.from('store_coupons').select('*').order('created_at', { ascending: false });
+  const endLocal = cfg.flash_sale_end
+    ? new Date(new Date(cfg.flash_sale_end).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
+
+  box.innerHTML = `
+    <div class="mt-8 pt-6 border-t border-antiqueGold/25 space-y-6 font-bengali">
+      <h2 class="text-xl font-bold text-antiqueGold flex items-center gap-2">
+        <i data-lucide="sliders" class="w-5 h-5"></i> স্টোর প্রমোশন, কুপন, অ্যাড-অন ও প্রিভিউ কন্ট্রোল
+      </h2>
+
+      <!-- A. FLASH SALE COUNTDOWN CONTROL -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-bold text-sm text-amber-300">১. ফ্ল্যাশ সেল কাউন্টডাউন ব্যানার</h3>
+          <label class="flex items-center gap-2 text-xs cursor-pointer">
+            <input id="adm-fs-active" type="checkbox" ${cfg.flash_sale_active ? 'checked' : ''} class="accent-amber-400 w-4 h-4" />
+            <span>ব্যানার চালু রাখুন</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <input id="adm-fs-title" type="text" value="${escapeHtml(cfg.flash_sale_title || '')}" placeholder="ব্যানার শিরোনাম (যেমন: পুজো স্পেশাল ফ্ল্যাশ সেল!)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-fs-sub" type="text" value="${escapeHtml(cfg.flash_sale_subtitle || '')}" placeholder="সাবটাইটেল (যেমন: সব ই-বুকে ২০% ছাড়)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-fs-coupon" type="text" value="${escapeHtml(cfg.flash_sale_coupon || '')}" placeholder="হাইলাইট কুপন কোড (যেমন: PUJO20)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory uppercase" />
+          <input id="adm-fs-end" type="datetime-local" value="${endLocal}" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <button onclick="adminSaveFlashSale()" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">ফ্ল্যাশ সেল সেভ করুন</button>
+      </div>
+
+      <!-- B. DISCOUNT COUPON MANAGER -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <h3 class="font-bold text-sm text-amber-300">২. ডিসকাউন্ট কুপন ম্যানেজার</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+          <input id="adm-cp-code" type="text" placeholder="কোড (PUJO20)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory uppercase font-mono" />
+          <select id="adm-cp-type" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory">
+            <option value="percent">শতাংশ (% ছাড়)</option>
+            <option value="flat">ফ্ল্যাট টাকা (₹ ছাড়)</option>
+          </select>
+          <input id="adm-cp-val" type="number" placeholder="ছাড়ের মান (যেমন: 20)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <select id="adm-cp-scope" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory">
+            <option value="all">সব কিছু (E-Book + Voice)</option>
+            <option value="ebook">শুধু E-Book</option>
+            <option value="voice">শুধু Voice Gift</option>
+          </select>
+          <input id="adm-cp-min" type="number" value="0" placeholder="ন্যূনতম অর্ডার (₹)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-cp-max" type="number" value="0" placeholder="সর্বোচ্চ ব্যবহার (0=আনলিমিটেড)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-cp-exp" type="datetime-local" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <button onclick="adminCreateCoupon()" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">+ নতুন কুপন যোগ করুন</button>
+        </div>
+
+        <div class="space-y-2 pt-2">
+          ${(coupons || []).map((c) => `
+            <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono font-bold text-antiqueGold px-2 py-0.5 rounded bg-midnight border border-antiqueGold/30">${escapeHtml(c.code)}</span>
+                <span>${c.discount_type === 'percent' ? c.discount_value + '% ছাড়' : '₹' + c.discount_value + ' ছাড়'}</span>
+                <span class="text-ivory/60">(${c.applies_to} | Min ₹${c.min_order_inr} | Used: ${c.used_count}${c.max_uses ? '/' + c.max_uses : ''})</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="adminToggleCoupon('${c.id}', ${!c.is_active})" class="px-2.5 py-1 rounded-lg ${c.is_active ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-400/40' : 'bg-ivory/10 text-ivory/60'}">
+                  ${c.is_active ? 'সক্রিয়' : 'বন্ধ'}
+                </button>
+                <button onclick="adminDeleteCoupon('${c.id}')" class="px-2.5 py-1 rounded-lg bg-red-600/25 text-red-200 hover:bg-red-600 hover:text-white">মুছুন</button>
+              </div>
+            </div>
+          `).join('') || '<p class="text-xs text-ivory/50">এখনও কোনো কুপন তৈরি করা হয়নি।</p>'}
+        </div>
+      </div>
+
+      <!-- C. VOICE DEMO AUDIO & ADD-ONS CONTROL -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <h3 class="font-bold text-sm text-amber-300">৩. কাস্টম ভয়েস ডেমো অডিও ও অ্যাড-অন কন্ট্রোল</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+          <input id="adm-vd-title" type="text" value="${escapeHtml(cfg.voice_demo_title || '')}" placeholder="ডেমো শিরোনাম (যেমন: ২০ সেকেন্ড আবৃত্তি স্যাম্পল)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-vd-url" type="url" value="${escapeHtml(cfg.voice_demo_audio_url || '')}" placeholder="ডেমো অডিও MP3 URL (Supabase Storage লিংক)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+
+        <div id="adm-addons-list" class="space-y-2 pt-1"></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+          <input id="adm-new-addon-name" type="text" placeholder="নতুন অ্যাড-অন নাম" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-new-addon-price" type="number" placeholder="মূল্য (₹)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <button onclick="adminAddDraftAddon()" class="px-3 py-2 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight">+ অ্যাড-অন যোগ করুন</button>
+        </div>
+        <button onclick="adminSaveVoiceExtras()" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">ডেমো অডিও ও অ্যাড-অন সেভ করুন</button>
+      </div>
+
+      <!-- D. E-BOOK FREE SAMPLE PREVIEW MANAGER -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <h3 class="font-bold text-sm text-amber-300">৪. ই-বুক ফ্রি স্যাম্পল প্রিভিউ সেটআপ</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+          <select id="adm-sp-book" onchange="adminFillSampleFields()" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory">
+            ${(state.ebooks || []).map((b) => `<option value="${b.id}">${escapeHtml(b.title)}</option>`).join('') || '<option value="">কোনো ই-বুক নেই</option>'}
+          </select>
+          <input id="adm-sp-url" type="url" placeholder="স্যাম্পল PDF লিংক (পাবলিক URL)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-sp-pages" type="number" min="1" max="10" value="3" placeholder="কত পাতা ফ্রি দেখাবে (যেমন: 3)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <textarea id="adm-sp-excerpt" rows="3" placeholder="অথবা বইয়ের প্রথম ২-৩টি কবিতা/অংশ এখানে লিখে দিন (ঐচ্ছিক)..." class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-xs text-ivory"></textarea>
+        <button onclick="adminSaveEbookSample()" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">স্যাম্পল প্রিভিউ সেভ করুন</button>
+      </div>
+    </div>
+  `;
+
+  renderAdminDraftAddons();
+  adminFillSampleFields();
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderAdminDraftAddons() {
+  const wrap = document.getElementById('adm-addons-list');
+  if (!wrap) return;
+  wrap.innerHTML = (window._adminDraftAddons || []).map((a, idx) => `
+    <div class="grid grid-cols-12 gap-2 items-center p-2 rounded-xl bg-deepPurple/30 border border-antiqueGold/15 text-xs">
+      <input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="window._adminDraftAddons[${idx}].enabled = this.checked" class="col-span-1 accent-amber-400" />
+      <input type="text" value="${escapeHtml(a.name)}" onchange="window._adminDraftAddons[${idx}].name = this.value" class="col-span-6 px-2.5 py-1.5 rounded-lg bg-midnight border border-ivory/15 text-ivory" />
+      <input type="number" value="${Number(a.price || 0)}" onchange="window._adminDraftAddons[${idx}].price = Number(this.value || 0)" class="col-span-3 px-2.5 py-1.5 rounded-lg bg-midnight border border-ivory/15 text-ivory font-mono" />
+      <button onclick="window._adminDraftAddons.splice(${idx}, 1); renderAdminDraftAddons()" class="col-span-2 py-1.5 rounded-lg bg-red-600/25 text-red-200 hover:bg-red-600 hover:text-white">মুছুন</button>
+    </div>
+  `).join('');
+}
+
+function adminAddDraftAddon() {
+  const name = (document.getElementById('adm-new-addon-name')?.value || '').trim();
+  const price = Number(document.getElementById('adm-new-addon-price')?.value || 0);
+  if (!name || price <= 0) return showToast('অ্যাড-অনের নাম ও সঠিক মূল্য দিন।', 'error');
+
+  window._adminDraftAddons.push({
+    id: 'addon_' + Date.now(),
+    name,
+    price,
+    enabled: true
+  });
+  document.getElementById('adm-new-addon-name').value = '';
+  document.getElementById('adm-new-addon-price').value = '';
+  renderAdminDraftAddons();
+}
+
+async function adminSaveFlashSale() {
+  const active = document.getElementById('adm-fs-active')?.checked || false;
+  const title = (document.getElementById('adm-fs-title')?.value || '').trim();
+  const subtitle = (document.getElementById('adm-fs-sub')?.value || '').trim();
+  const coupon = (document.getElementById('adm-fs-coupon')?.value || '').trim().toUpperCase();
+  const endRaw = document.getElementById('adm-fs-end')?.value || '';
+  const endIso = endRaw ? new Date(endRaw).toISOString() : null;
+
+  const payload = {
+    flash_sale_active: active,
+    flash_sale_title: title,
+    flash_sale_subtitle: subtitle,
+    flash_sale_coupon: coupon,
+    flash_sale_end: endIso
+  };
+
+  const { error } = await sb.from('store_settings').update(payload).eq('id', 1);
+  if (error) return showToast('ফ্ল্যাশ সেল সেভ ব্যর্থ: ' + error.message, 'error');
+
+  state.storeSettings = { ...(state.storeSettings || {}), ...payload };
+  showToast('ফ্ল্যাশ সেল সেটিংস আপডেট হয়েছে!', 'success');
+}
+
+async function adminSaveVoiceExtras() {
+  const payload = {
+    voice_demo_title: (document.getElementById('adm-vd-title')?.value || '').trim(),
+    voice_demo_audio_url: (document.getElementById('adm-vd-url')?.value || '').trim(),
+    voice_addons: window._adminDraftAddons || []
+  };
+
+  const { error } = await sb.from('store_settings').update(payload).eq('id', 1);
+  if (error) return showToast('সেভ ব্যর্থ: ' + error.message, 'error');
+
+  state.storeSettings = { ...(state.storeSettings || {}), ...payload };
+  showToast('ডেমো অডিও ও অ্যাড-অন আপডেট হয়েছে!', 'success');
+}
+
+async function adminCreateCoupon() {
+  const code = (document.getElementById('adm-cp-code')?.value || '').trim().toUpperCase();
+  const discount_type = document.getElementById('adm-cp-type')?.value || 'percent';
+  const discount_value = Number(document.getElementById('adm-cp-val')?.value || 0);
+  const applies_to = document.getElementById('adm-cp-scope')?.value || 'all';
+  const min_order_inr = Number(document.getElementById('adm-cp-min')?.value || 0);
+  const max_uses = Number(document.getElementById('adm-cp-max')?.value || 0);
+  const expRaw = document.getElementById('adm-cp-exp')?.value || '';
+  const expires_at = expRaw ? new Date(expRaw).toISOString() : null;
+
+  if (!code || discount_value <= 0) return showToast('সঠিক কুপন কোড ও ছাড়ের মান লিখুন।', 'error');
+
+  const { error } = await sb.from('store_coupons').insert([{
+    code, discount_type, discount_value, applies_to, min_order_inr, max_uses, expires_at, is_active: true
+  }]);
+
+  if (error) return showToast('কুপন তৈরি ব্যর্থ: ' + error.message, 'error');
+  showToast(`কুপন "${code}" তৈরি হয়েছে!`, 'success');
+  loadAdminPhase1Panel();
+}
+
+async function adminToggleCoupon(id, nextState) {
+  const { error } = await sb.from('store_coupons').update({ is_active: nextState }).eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  loadAdminPhase1Panel();
+}
+
+async function adminDeleteCoupon(id) {
+  const { error } = await sb.from('store_coupons').delete().eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  showToast('কুপন মুছে ফেলা হয়েছে।', 'success');
+  loadAdminPhase1Panel();
+}
+
+function adminFillSampleFields() {
+  const id = document.getElementById('adm-sp-book')?.value;
+  const book = (state.ebooks || []).find((b) => b.id === id);
+  if (!book) return;
+  document.getElementById('adm-sp-url').value = book.sample_pdf_url || '';
+  document.getElementById('adm-sp-pages').value = book.sample_pages || 3;
+  document.getElementById('adm-sp-excerpt').value = book.sample_excerpt || '';
+}
+
+async function adminSaveEbookSample() {
+  const id = document.getElementById('adm-sp-book')?.value;
+  if (!id) return;
+
+  const payload = {
+    sample_pdf_url: (document.getElementById('adm-sp-url')?.value || '').trim(),
+    sample_pages: Math.max(1, Number(document.getElementById('adm-sp-pages')?.value || 3)),
+    sample_excerpt: (document.getElementById('adm-sp-excerpt')?.value || '').trim()
+  };
+
+  const { error } = await sb.from('ebooks').update(payload).eq('id', id);
+  if (error) return showToast('সেভ ব্যর্থ: ' + error.message, 'error');
+
+  const local = (state.ebooks || []).find((b) => b.id === id);
+  if (local) Object.assign(local, payload);
+  showToast('ই-বুক স্যাম্পল প্রিভিউ আপডেট হয়েছে!', 'success');
+}
+// =========================================================================
+// PHASE 2: COMBO BUNDLES, GIFT AN E-BOOK & REFERRAL WALLET ENGINE
+// =========================================================================
+window.kvPhase2 = {
+  bundles: [],
+  myBundleOrders: [],
+  myGiftOrders: [],
+  myWalletTxns: [],
+  referralCode: '',
+  walletBalance: 0
+};
+
+window.kvBundleCheckout = {
+  bundleId: '',
+  basePrice: 0,
+  refCode: '',
+  refDiscount: 0,
+  walletUsed: 0,
+  finalPrice: 0
+};
+
+async function loadPhase2PublicData() {
+  const { data } = await sb
+    .from('store_bundles')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+  window.kvPhase2.bundles = data || [];
+}
+
+async function loadPhase2UserData() {
+  if (!state.user) {
+    window.kvPhase2.myBundleOrders = [];
+    window.kvPhase2.myGiftOrders = [];
+    window.kvPhase2.myWalletTxns = [];
+    window.kvPhase2.referralCode = '';
+    window.kvPhase2.walletBalance = 0;
+    return;
+  }
+
+  const [refRes, bunOrdRes, giftRes, txnRes] = await Promise.all([
+    sb.rpc('ensure_my_referral_code'),
+    sb.from('bundle_orders').select('*, store_bundles(title, bundle_price_inr)').eq('user_id', state.user.id).order('created_at', { ascending: false }),
+    sb.from('ebook_gifts').select('*, ebooks(title)').eq('buyer_user_id', state.user.id).order('created_at', { ascending: false }),
+    sb.from('wallet_transactions').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(20)
+  ]);
+
+  if (!refRes.error && refRes.data?.ok) {
+    window.kvPhase2.referralCode = refRes.data.referral_code || '';
+    window.kvPhase2.walletBalance = Number(refRes.data.wallet_balance || 0);
+  }
+  window.kvPhase2.myBundleOrders = bunOrdRes.data || [];
+  window.kvPhase2.myGiftOrders = giftRes.data || [];
+  window.kvPhase2.myWalletTxns = txnRes.data || [];
+}
+
+// -------------------------------------------------------------------------
+// 1. E-BOOK MODAL: COMBINED COUPON + REFERRAL + WALLET PRICE CALCULATOR
+// -------------------------------------------------------------------------
+function recalcEbookCheckoutTotal() {
+  const c = window.kvCheckout?.ebook;
+  if (!c) return;
+
+  const base = Number(c.basePrice || 0);
+  const couponDisc = Number(c.couponDiscount || 0);
+  const refDisc = Number(c.refDiscount || 0);
+  const afterDiscounts = Math.max(0, base - couponDisc - refDisc);
+
+  const walletChk = document.getElementById('eo-use-wallet');
+  const maxWallet = Number(window.kvPhase2.walletBalance || 0);
+  const walletUsed = walletChk && walletChk.checked ? Math.min(maxWallet, afterDiscounts) : 0;
+
+  c.discount = couponDisc + refDisc;
+  c.walletUsed = walletUsed;
+  c.finalPrice = Math.max(0, afterDiscounts - walletUsed);
+
+  const priceEl = document.getElementById('eo-price');
+  if (priceEl) {
+    priceEl.innerHTML = c.finalPrice < base
+      ? `<span class="line-through text-ivory/50 text-xs mr-1.5">₹${base}</span>₹${c.finalPrice}`
+      : `₹${base}`;
+  }
+}
+
+async function applyEbookReferral() {
+  const input = document.getElementById('eo-ref-input');
+  const msgEl = document.getElementById('eo-ref-msg');
+  if (!input || !msgEl) return;
+
+  const c = window.kvCheckout.ebook;
+  const code = input.value.trim().toUpperCase();
+  if (!code) {
+    c.refCode = '';
+    c.refDiscount = 0;
+    msgEl.textContent = '';
+    return recalcEbookCheckoutTotal();
+  }
+
+  const { data, error } = await sb.rpc('validate_referral_code', { p_code: code });
+  if (error || !data?.ok) {
+    c.refCode = '';
+    c.refDiscount = 0;
+    msgEl.className = 'text-[11px] text-red-400 font-bengali mt-1';
+    msgEl.textContent = data?.msg || 'রেফারেল কোড যাচাই ব্যর্থ।';
+    return recalcEbookCheckoutTotal();
+  }
+
+  const disc = Math.round((Number(c.basePrice || 0) * Number(data.discount_pct || 10)) / 100);
+  c.refCode = data.code;
+  c.refDiscount = disc;
+  msgEl.className = 'text-[11px] text-emerald-400 font-bengali mt-1';
+  msgEl.textContent = `${data.referrer_name}-এর রেফারেল কোড প্রয়োগ হয়েছে! ${data.discount_pct}% (₹${disc}) ছাড়।`;
+  recalcEbookCheckoutTotal();
+}
+
+// -------------------------------------------------------------------------
+// 2. STORE TAB: COMBO / BUNDLE PACKS
+// -------------------------------------------------------------------------
+function renderStoreBundlesTab() {
+  const bundles = window.kvPhase2.bundles || [];
+
+  return `
+    <div class="space-y-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        ${bundles.map((bn) => {
+          const includedBooks = (bn.ebook_ids || [])
+            .map((id) => (state.ebooks || []).find((b) => b.id === id))
+            .filter(Boolean);
+          const myOrd = (window.kvPhase2.myBundleOrders || []).find((o) => o.bundle_id === bn.id);
+          const savings = Math.max(0, Number(bn.original_price_inr || 0) - Number(bn.bundle_price_inr || 0));
+
+          return `
+            <div class="glass-panel rounded-2xl overflow-hidden border border-antiqueGold/35 flex flex-col shadow-card">
+              <div class="relative h-52 overflow-hidden">
+                <img src="${safeCover(bn.cover_image_url || includedBooks[0]?.cover_image_url, bn.title)}" class="w-full h-full object-cover" />
+                ${savings > 0 ? `<span class="absolute top-3 left-3 px-3 py-1 rounded-full bg-emerald-600 text-white font-bold text-[11px]">সাশ্রয় ₹${savings}</span>` : ''}
+                <span class="absolute top-3 right-3 px-3 py-1 rounded-full bg-midnight/90 border border-antiqueGold/45 text-antiqueGold font-bold text-xs">
+                  ${bn.original_price_inr > bn.bundle_price_inr ? `<span class="line-through text-ivory/50 mr-1">₹${bn.original_price_inr}</span>` : ''}₹${bn.bundle_price_inr}
+                </span>
+              </div>
+              <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                <div class="space-y-2">
+                  <span class="inline-block px-2.5 py-0.5 rounded-full bg-antiqueGold/15 border border-antiqueGold/35 text-antiqueGold text-[10px] font-semibold">কম্বো বান্ডেল প্যাক</span>
+                  <h3 class="text-lg font-bold text-ivory">${escapeHtml(bn.title)}</h3>
+                  <div>${typeof renderProductRatingBadge === 'function' ? renderProductRatingBadge('bundle', bn.id) : ''}</div>
+                  <p class="text-xs text-ivory/70">${escapeHtml(bn.description || '')}</p>
+                  <div class="pt-1 space-y-1 text-xs text-ivory/85">
+                    <div class="text-antiqueGold font-semibold text-[11px]">এই প্যাকে যা থাকছে:</div>
+                    ${includedBooks.map((eb) => `<div class="flex items-center gap-1.5"><i data-lucide="book-open" class="w-3.5 h-3.5 text-antiqueGold shrink-0"></i> ${escapeHtml(eb.title)}</div>`).join('')}
+                    ${bn.includes_voice_gift ? `<div class="flex items-center gap-1.5 text-emerald-300"><i data-lucide="mic" class="w-3.5 h-3.5 shrink-0"></i> কাস্টম ভয়েস গিফট: ${escapeHtml(bn.voice_package_label || 'অন্তর্ভুক্ত')}</div>` : ''}
+                  </div>
+                </div>
+                <div>
+                  ${myOrd?.status === 'approved' ? `
+                    <div class="w-full py-2.5 px-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs text-center font-semibold">
+                      কেনা সম্পন্ন — ই-বুক ট্যাবে সব বই আনলক আছে!
+                    </div>
+                  ` : myOrd?.status === 'pending' ? `
+                    <div class="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-400/35 text-amber-200 text-xs text-center">
+                      অর্ডার যাচাই চলছে (Txn: ${escapeHtml(myOrd.transaction_id)})
+                    </div>
+                  ` : `
+                    <button onclick="openBundleOrderModal('${bn.id}')" class="w-full py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs shadow-gold hover:opacity-90 transition">
+                      কম্বো কিনুন — ₹${bn.bundle_price_inr}
+                    </button>
+                  `}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') || `<div class="col-span-full glass-panel rounded-2xl p-10 text-center text-ivory/60 text-sm">এই মুহূর্তে কোনো কম্বো প্যাক চালু নেই। খুব শীঘ্রই আসছে!</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function openBundleOrderModal(bundleId) {
+  if (!state.user) {
+    showToast('কম্বো প্যাক কেনার জন্য আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  const bn = (window.kvPhase2.bundles || []).find((x) => x.id === bundleId);
+  if (!bn) return;
+
+  const cfg = state.storeSettings || {};
+  const base = Number(bn.bundle_price_inr || 0);
+  window.kvBundleCheckout = { bundleId: bn.id, title: bn.title, basePrice: base, refCode: '', refDiscount: 0, walletUsed: 0, finalPrice: base };
+
+  let modal = document.getElementById('kv-bundle-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-bundle-modal';
+    modal.className = 'fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  const walletBal = Number(window.kvPhase2.walletBalance || 0);
+  const refEnabled = cfg.referral_enabled !== false;
+
+  modal.innerHTML = `
+    <div class="w-full max-w-lg rounded-3xl bg-midnight border border-antiqueGold/40 p-6 shadow-card font-bengali space-y-4 my-auto">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <span class="text-[10px] uppercase text-antiqueGold font-semibold">কম্বো প্যাক অর্ডার</span>
+          <h3 class="text-lg font-bold text-ivory">${escapeHtml(bn.title)}</h3>
+        </div>
+        <button onclick="closeDynamicModal('kv-bundle-modal')" class="text-ivory/60 hover:text-white text-sm">✕</button>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-deepPurple/45 border border-antiqueGold/25 text-xs flex items-center justify-between">
+        <span>সর্বমোট প্রদেয়:</span>
+        <strong id="bo-final-price" class="text-lg text-antiqueGold font-mono">₹${base}</strong>
+      </div>
+
+      ${refEnabled ? `
+        <div class="space-y-1">
+          <div class="flex gap-2">
+            <input id="bo-ref-input" type="text" placeholder="বন্ধুর রেফারেল কোড (ঐচ্ছিক)" class="flex-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-xs text-ivory uppercase font-mono" />
+            <button type="button" onclick="applyBundleReferral()" class="px-3.5 py-2 rounded-xl bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold text-xs font-semibold">প্রয়োগ</button>
+          </div>
+          <div id="bo-ref-msg" class="text-[11px]"></div>
+        </div>
+      ` : ''}
+
+      ${walletBal > 0 ? `
+        <label class="flex items-center justify-between p-3 rounded-xl bg-emerald-950/35 border border-emerald-500/35 text-xs cursor-pointer">
+          <span class="flex items-center gap-2">
+            <input id="bo-use-wallet" type="checkbox" onchange="recalcBundlePrice()" class="accent-emerald-400" />
+            <span>KothaVerse ওয়ালেট ক্রেডিট ব্যবহার করুন</span>
+          </span>
+          <strong class="text-emerald-300 font-mono">ব্যালেন্স: ₹${walletBal}</strong>
+        </label>
+      ` : ''}
+
+      <form onsubmit="handleBundleOrderSubmit(event)" class="space-y-3 text-xs">
+        <input id="bo-name" required value="${escapeHtml(state.profile?.full_name || '')}" placeholder="আপনার নাম*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        <input id="bo-wa" required type="tel" placeholder="আপনার WhatsApp নম্বর*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        <button type="submit" class="w-full py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">পেমেন্ট করতে এগিয়ে যান →</button>
+      </form>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function recalcBundlePrice() {
+  const b = window.kvBundleCheckout;
+  const afterRef = Math.max(0, b.basePrice - b.refDiscount);
+  const wChk = document.getElementById('bo-use-wallet');
+  b.walletUsed = wChk && wChk.checked ? Math.min(window.kvPhase2.walletBalance || 0, afterRef) : 0;
+  b.finalPrice = Math.max(0, afterRef - b.walletUsed);
+
+  const el = document.getElementById('bo-final-price');
+  if (el) {
+    el.innerHTML = b.finalPrice < b.basePrice
+      ? `<span class="line-through text-ivory/50 text-xs mr-1.5">₹${b.basePrice}</span>₹${b.finalPrice}`
+      : `₹${b.basePrice}`;
+  }
+}
+
+async function applyBundleReferral() {
+  const input = document.getElementById('bo-ref-input');
+  const msgEl = document.getElementById('bo-ref-msg');
+  if (!input || !msgEl) return;
+
+  const { data, error } = await sb.rpc('validate_referral_code', { p_code: input.value.trim() });
+  if (error || !data?.ok) {
+    window.kvBundleCheckout.refCode = '';
+    window.kvBundleCheckout.refDiscount = 0;
+    msgEl.className = 'text-[11px] text-red-400';
+    msgEl.textContent = data?.msg || 'রেফারেল কোড সঠিক নয়।';
+    return recalcBundlePrice();
+  }
+
+  const disc = Math.round((window.kvBundleCheckout.basePrice * Number(data.discount_pct || 10)) / 100);
+  window.kvBundleCheckout.refCode = data.code;
+  window.kvBundleCheckout.refDiscount = disc;
+  msgEl.className = 'text-[11px] text-emerald-400';
+  msgEl.textContent = `${data.referrer_name}-এর কোড প্রয়োগ হয়েছে! ${data.discount_pct}% (₹${disc}) ছাড়।`;
+  recalcBundlePrice();
+}
+
+async function handleBundleOrderSubmit(e) {
+  e.preventDefault();
+  if (!state.user) return openAuthModal('login');
+
+  const b = { ...window.kvBundleCheckout };
+  const buyerName = document.getElementById('bo-name').value.trim();
+  const whatsapp = document.getElementById('bo-wa').value.trim();
+
+  closeDynamicModal('kv-bundle-modal');
+
+  openUpiGatewayPopup({
+    title: b.title || 'কম্বো প্যাক',
+    subtitle: 'কম্বো বান্ডেল পেমেন্ট',
+    amount: b.finalPrice,
+    note: `Bundle: ${b.title || 'KothaVerse'}`,
+    onSuccess: async (utr) => {
+      if (b.walletUsed > 0) {
+        const { data: wRes, error: wErr } = await sb.rpc('deduct_my_wallet', {
+          p_amount: b.walletUsed,
+          p_note: 'কম্বো বান্ডেল অর্ডারে ব্যবহৃত'
+        });
+        if (wErr || !wRes?.ok) throw new Error(wRes?.msg || 'ওয়ালেট ব্যালেন্স কাটতে ব্যর্থ।');
+      }
+
+      const { error } = await sb.from('bundle_orders').insert({
+        user_id: state.user.id,
+        bundle_id: b.bundleId,
+        buyer_name: buyerName,
+        buyer_email: state.user.email,
+        whatsapp_number: whatsapp,
+        transaction_id: utr,
+        referral_code_used: b.refCode || '',
+        wallet_used_inr: b.walletUsed || 0,
+        discount_inr: b.refDiscount || 0,
+        final_amount_inr: b.finalPrice,
+        status: 'pending'
+      });
+      if (error) throw error;
+
+      await loadPhase2UserData();
+      renderCurrentRoute();
+    }
+  });
+}
+// -------------------------------------------------------------------------
+// 3. GIFT AN E-BOOK MODAL + REDEEM + REFERRAL WALLET TAB
+// -------------------------------------------------------------------------
+function openGiftEbookModal(ebookId) {
+  if (!state.user) {
+    showToast('ই-বুক গিফট করার জন্য আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  const book = (state.ebooks || []).find((x) => x.id === ebookId);
+  if (!book) return;
+
+  let modal = document.getElementById('kv-gift-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-gift-modal';
+    modal.className = 'fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="w-full max-w-lg rounded-3xl bg-midnight border border-antiqueGold/40 p-6 shadow-card font-bengali space-y-4 my-auto">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <span class="text-[10px] uppercase text-antiqueGold font-semibold">Gift an E-Book</span>
+          <h3 class="text-lg font-bold text-ivory">প্রিয়জনকে "${escapeHtml(book.title)}" উপহার দিন</h3>
+        </div>
+        <button onclick="closeDynamicModal('kv-gift-modal')" class="text-ivory/60 hover:text-white text-sm">✕</button>
+      </div>
+
+      <form onsubmit="handleGiftOrderSubmit(event, '${book.id}', ${Number(book.price_inr || 0)})" class="space-y-3 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <input id="gf-buyer-name" required value="${escapeHtml(state.profile?.full_name || '')}" placeholder="আপনার নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="gf-buyer-wa" required type="tel" placeholder="আপনার WhatsApp নম্বর*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <input id="gf-rec-name" required placeholder="যাঁকে গিফট দেবেন তাঁর নাম*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="gf-rec-wa" type="tel" placeholder="তাঁর WhatsApp নম্বর (ঐচ্ছিক)" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <textarea id="gf-note" rows="2" placeholder="উপহারের সাথে ছোট্ট শুভেচ্ছা বার্তা (ঐচ্ছিক)..." class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory"></textarea>
+        <button type="submit" class="w-full py-3 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">পেমেন্ট করুন — ₹${book.price_inr} →</button>
+      </form>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+async function handleGiftOrderSubmit(e, ebookId, amountInr) {
+  e.preventDefault();
+  if (!state.user) return openAuthModal('login');
+
+  const book = (state.ebooks || []).find((x) => x.id === ebookId);
+  const giftDraft = {
+    buyer_user_id: state.user.id,
+    buyer_name: document.getElementById('gf-buyer-name').value.trim(),
+    buyer_whatsapp: document.getElementById('gf-buyer-wa').value.trim(),
+    recipient_name: document.getElementById('gf-rec-name').value.trim(),
+    recipient_whatsapp: document.getElementById('gf-rec-wa').value.trim(),
+    personal_note: document.getElementById('gf-note').value.trim(),
+    ebook_id: ebookId,
+    amount_inr: amountInr
+  };
+
+  closeDynamicModal('kv-gift-modal');
+
+  openUpiGatewayPopup({
+    title: `ই-বুক গিফট: ${book?.title || 'E-Book'}`,
+    subtitle: `প্রাপক: ${giftDraft.recipient_name}`,
+    amount: amountInr,
+    note: `Gift Ebook for ${giftDraft.recipient_name}`,
+    onSuccess: async (utr) => {
+      const { error } = await sb.from('ebook_gifts').insert({
+        ...giftDraft,
+        transaction_id: utr,
+        status: 'pending'
+      });
+      if (error) throw error;
+
+      await loadPhase2UserData();
+      state.storeTab = 'gift_wallet';
+      renderCurrentRoute();
+    }
+  });
+}
+
+function renderStoreGiftAndWalletTab() {
+  const cfg = state.storeSettings || {};
+  const refPct = Number(cfg.referral_friend_discount_pct ?? 10);
+  const refReward = Number(cfg.referral_referrer_reward_inr ?? 20);
+  const myCode = window.kvPhase2.referralCode || '';
+  const walletBal = Number(window.kvPhase2.walletBalance || 0);
+
+  return `
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 font-bengali">
+      <!-- LEFT: GIFT CODE REDEEM + MY SENT GIFTS -->
+      <div class="space-y-6">
+        <div class="glass-panel rounded-3xl p-6 border border-antiqueGold/30 space-y-4">
+          <div class="flex items-center gap-2 text-antiqueGold font-bold text-lg">
+            <i data-lucide="gift" class="w-5 h-5"></i> ই-বুক গিফট কোড রিডিম করুন
+          </div>
+          <p class="text-xs text-ivory/70">কেউ আপনাকে KothaVerse-এর ই-বুক গিফট কোড পাঠিয়ে থাকলে নিচে কোড দিন—বইটি সঙ্গে সঙ্গে আপনার অ্যাকাউন্টে আনলক হয়ে যাবে।</p>
+          <form onsubmit="handleRedeemGiftCode(event)" class="space-y-3 text-xs">
+            <input id="rd-code" required placeholder="গিফট কোড লিখুন (যেমন: KV-GIFT-AB12CD)" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/30 text-ivory font-mono uppercase" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input id="rd-name" required value="${escapeHtml(state.profile?.full_name || '')}" placeholder="আপনার নাম (PDF ওয়াটারমার্কের জন্য)*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+              <input id="rd-wa" required type="tel" placeholder="আপনার WhatsApp নম্বর*" class="px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+            </div>
+            <button type="submit" class="px-6 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">বই আনলক করুন</button>
+          </form>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6 border border-antiqueGold/20 space-y-3">
+          <h3 class="text-base font-bold text-antiqueGold">আপনার কেনা ই-বুক গিফটসমূহ</h3>
+          ${!state.user ? `
+            <p class="text-xs text-ivory/60">আপনার গিফট কোড দেখতে লগইন করুন।</p>
+          ` : (window.kvPhase2.myGiftOrders || []).length ? window.kvPhase2.myGiftOrders.map((g) => `
+            <div class="p-3.5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 text-xs space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <strong class="text-ivory">${escapeHtml(g.ebooks?.title || 'E-Book')} → ${escapeHtml(g.recipient_name)}</strong>
+                <span class="px-2 py-0.5 rounded-full text-[10px] uppercase bg-deepPurple text-antiqueGold">${escapeHtml(g.status)}</span>
+              </div>
+              ${g.status === 'approved' && g.gift_code ? `
+                <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/35">
+                  <span class="font-mono font-bold text-emerald-300">${escapeHtml(g.gift_code)} ${g.is_redeemed ? '(রিডিম সম্পন্ন)' : ''}</span>
+                  <div class="flex gap-1.5">
+                    <button onclick="copyTextToClipboard('${escapeHtml(g.gift_code)}')" class="px-2.5 py-1 rounded-lg bg-midnight text-antiqueGold">কপি</button>
+                    <button onclick="shareGiftOnWhatsApp('${g.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold">WhatsApp-এ পাঠান</button>
+                  </div>
+                </div>
+              ` : `<div class="text-[11px] text-amber-300">যাচাই চলছে (Txn: ${escapeHtml(g.transaction_id)})</div>`}
+            </div>
+          `).join('') : `<p class="text-xs text-ivory/50">এখনও কোনো ই-বুক গিফট করেননি। ই-বুক ট্যাবে গিয়ে যেকোনো বইয়ে "গিফট করুন" বাটনে ক্লিক করুন।</p>`}
+        </div>
+      </div>
+
+      <!-- RIGHT: REFERRAL CODE & KOTHAVERSE WALLET -->
+      <div class="glass-panel rounded-3xl p-6 border border-antiqueGold/30 space-y-5">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <span class="text-[10px] uppercase text-antiqueGold font-semibold">Reader Referral & Credit</span>
+            <h3 class="text-lg font-bold text-ivory">রেফারেল ও KothaVerse ওয়ালেট</h3>
+          </div>
+          <div class="text-right px-4 py-2 rounded-2xl bg-emerald-950/50 border border-emerald-400/40">
+            <div class="text-[10px] text-emerald-300">ওয়ালেট ব্যালেন্স</div>
+            <div class="text-xl font-mono font-bold text-white">₹${walletBal}</div>
+          </div>
+        </div>
+
+        <p class="text-xs text-ivory/75 leading-relaxed">
+          বন্ধুকে আপনার রেফারেল কোড শেয়ার করুন। বন্ধু ই-বুক বা কম্বো অর্ডারে কোড ব্যবহার করলে <strong>${refPct}% ছাড়</strong> পাবে, আর অর্ডার অ্যাপ্রুভ হলেই আপনার ওয়ালেটে <strong>₹${refReward} ক্রেডিট</strong> জমা হবে!
+        </p>
+
+        ${!state.user ? `
+          <button onclick="openAuthModal('login')" class="px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">রেফারেল কোড পেতে লগইন করুন</button>
+        ` : `
+          <div class="p-4 rounded-2xl bg-midnight/75 border border-antiqueGold/35 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div class="text-[11px] text-ivory/60">আপনার ইনভাইট কোড</div>
+              <div class="text-2xl font-mono font-bold text-antiqueGold tracking-wider">${escapeHtml(myCode || 'লোড হচ্ছে...')}</div>
+            </div>
+            <div class="flex gap-2 text-xs">
+              <button onclick="copyTextToClipboard('${escapeHtml(myCode)}')" class="px-3.5 py-2 rounded-xl bg-deepPurple border border-antiqueGold/35 text-antiqueGold font-semibold">কপি</button>
+              <button onclick="shareReferralOnWhatsApp()" class="px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-semibold">WhatsApp শেয়ার</button>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <div class="text-xs font-semibold text-antiqueGold">ওয়ালেট লেনদেন ইতিহাস</div>
+            ${(window.kvPhase2.myWalletTxns || []).map((t) => `
+              <div class="p-2.5 rounded-xl bg-midnight/50 border border-ivory/10 flex items-center justify-between text-xs">
+                <div>
+                  <div class="text-ivory/90">${escapeHtml(t.note || t.type)}</div>
+                  <div class="text-[10px] text-ivory/50">${new Date(t.created_at).toLocaleDateString('bn-IN')}</div>
+                </div>
+                <span class="font-mono font-bold ${t.amount_inr >= 0 ? 'text-emerald-400' : 'text-red-400'}">
+                  ${t.amount_inr >= 0 ? '+₹' + t.amount_inr : '-₹' + Math.abs(t.amount_inr)}
+                </span>
+              </div>
+            `).join('') || '<p class="text-xs text-ivory/50">এখনও কোনো ওয়ালেট লেনদেন নেই।</p>'}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+async function handleRedeemGiftCode(e) {
+  e.preventDefault();
+  if (!state.user) {
+    showToast('গিফট রিডিম করতে আগে লগইন করুন।', 'info');
+    return openAuthModal('login');
+  }
+  const code = document.getElementById('rd-code').value.trim().toUpperCase();
+  const name = document.getElementById('rd-name').value.trim();
+  const wa = document.getElementById('rd-wa').value.trim();
+
+  const { data, error } = await sb.rpc('redeem_ebook_gift_code', {
+    p_code: code,
+    p_buyer_name: name,
+    p_whatsapp: wa
+  });
+
+  if (error || !data?.ok) {
+    return showToast(data?.msg || error?.message || 'রিডিম ব্যর্থ হয়েছে।', 'error');
+  }
+
+  showToast(`অভিনন্দন! ${data.sender}-এর পাঠানো ই-বুক আপনার অ্যাকাউন্টে আনলক হয়েছে!`, 'success');
+  await loadUserPersonalData();
+  state.storeTab = 'ebooks';
+  renderCurrentRoute();
+}
+
+function shareGiftOnWhatsApp(giftId) {
+  const g = (window.kvPhase2.myGiftOrders || []).find((x) => x.id === giftId);
+  if (!g || !g.gift_code) return;
+  const bookTitle = g.ebooks?.title || 'ই-বুক';
+  const msg = `প্রিয় ${g.recipient_name},\n\nতোমার জন্য KothaVerse-এর "${bookTitle}" ই-বুকটি উপহার পাঠালাম! 🎁\n${g.personal_note ? `\n"${g.personal_note}"\n` : ''}\n*রিডিম কোড:* ${g.gift_code}\n\nবইটি আনলক করতে KothaVerse Store → "গিফট ও রেফারেল" ট্যাবে গিয়ে কোডটি বসাও:\n${window.location.origin}/#store`;
+  const wa = typeof formatIndianWA === 'function' ? formatIndianWA(g.recipient_whatsapp) : '';
+  const url = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+function shareReferralOnWhatsApp() {
+  const code = window.kvPhase2.referralCode;
+  if (!code) return;
+  const pct = Number(state.storeSettings?.referral_friend_discount_pct ?? 10);
+  const msg = `KothaVerse-এ অসাধারণ বাংলা ই-বুক ও কাস্টম ভয়েস গিফট রয়েছে! আমার রেফারেল কোড *${code}* ব্যবহার করে অর্ডার করলেই পাবে ${pct}% ডিসকাউন্ট।\nভিজিট করো: ${window.location.origin}/#store`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+function closeDynamicModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('hidden');
+  el.classList.remove('flex');
+}
+
+// -------------------------------------------------------------------------
+// 4. ADMIN PHASE 2 CONTROL PANEL (Bundles, Gift Approvals & Referral Control)
+// -------------------------------------------------------------------------
+async function loadAdminPhase2Panel(containerId = 'admin-phase2-controls') {
+  const box = document.getElementById(containerId);
+  if (!box || state.profile?.role !== 'admin') return;
+
+  const [bunRes, bunOrdRes, giftRes, ebRefOrdRes] = await Promise.all([
+    sb.from('store_bundles').select('*').order('created_at', { ascending: false }),
+    sb.from('bundle_orders').select('*, store_bundles(title, ebook_ids)').order('created_at', { ascending: false }),
+    sb.from('ebook_gifts').select('*, ebooks(title)').order('created_at', { ascending: false }),
+    sb.from('ebook_orders').select('*, ebooks(title)').eq('status', 'approved').eq('referral_rewarded', false).neq('referral_code_used', '')
+  ]);
+
+  window._adminPhase2Cache = {
+    bundles: bunRes.data || [],
+    bundleOrders: bunOrdRes.data || [],
+    gifts: giftRes.data || [],
+    pendingEbookRefRewards: ebRefOrdRes.data || []
+  };
+
+  const cfg = state.storeSettings || {};
+
+  box.innerHTML = `
+    <div class="mt-8 pt-6 border-t border-antiqueGold/25 space-y-6 font-bengali">
+      <h2 class="text-xl font-bold text-antiqueGold flex items-center gap-2">
+        <i data-lucide="package-plus" class="w-5 h-5"></i> কম্বো প্যাক, গিফট কোড ও রেফারেল ওয়ালেট কন্ট্রোল (Phase 2)
+      </h2>
+
+      <!-- A. COMBO / BUNDLE CREATOR & LIST -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <h3 class="font-bold text-sm text-amber-300">১. কম্বো / বান্ডেল প্যাক ম্যানেজার</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+          <input id="adm-bn-title" placeholder="কম্বো নাম (যেমন: পুজো ৩ ই-বুক মহা-সংকলন)*" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-bn-cover" placeholder="কভার ছবির URL (ঐচ্ছিক)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-bn-orig" type="number" placeholder="আসল মোট দাম (₹ যেমন: 297)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-bn-price" type="number" placeholder="কম্বো অফার দাম (₹ যেমন: 199)*" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <textarea id="adm-bn-desc" rows="2" placeholder="কম্বো বিবরণ..." class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-xs text-ivory"></textarea>
+
+        <div class="space-y-1.5 text-xs">
+          <div class="text-ivory/80 font-semibold">কম্বোতে কোন কোন ই-বুক থাকবে সিলেক্ট করুন:</div>
+          <div class="flex flex-wrap gap-2">
+            ${(state.ebooks || []).map((eb) => `
+              <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-deepPurple/40 border border-antiqueGold/20 cursor-pointer">
+                <input type="checkbox" class="adm-bn-eb-chk accent-amber-400" value="${eb.id}" />
+                <span>${escapeHtml(eb.title)} (₹${eb.price_inr})</span>
+              </label>
+            `).join('') || '<span class="text-ivory/50">আগে ই-বুক যোগ করুন।</span>'}
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="adm-bn-voice" type="checkbox" class="accent-amber-400" />
+            <span>কাস্টম ভয়েস গিফট অন্তর্ভুক্ত করুন</span>
+          </label>
+          <input id="adm-bn-vlabel" placeholder="ভয়েস প্যাকেজ লেবেল (যেমন: Mini Voice Note)" class="flex-1 min-w-[200px] px-3 py-1.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+
+        <button onclick="adminCreateBundle()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs">+ নতুন কম্বো প্যাক তৈরি করুন</button>
+
+        <div class="space-y-2 pt-2">
+          ${window._adminPhase2Cache.bundles.map((bn) => `
+            <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div>
+                <strong class="text-ivory">${escapeHtml(bn.title)}</strong>
+                <span class="ml-2 text-antiqueGold font-mono">₹${bn.bundle_price_inr}</span>
+                <span class="ml-2 text-ivory/60">(${(bn.ebook_ids || []).length}টি ই-বুক${bn.includes_voice_gift ? ' + ভয়েস গিফট' : ''})</span>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="adminToggleBundle('${bn.id}', ${!bn.is_active})" class="px-2.5 py-1 rounded-lg ${bn.is_active ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-400/40' : 'bg-ivory/10 text-ivory/60'}">${bn.is_active ? 'চালু' : 'বন্ধ'}</button>
+                <button onclick="adminDeleteBundle('${bn.id}')" class="px-2.5 py-1 rounded-lg bg-red-600/25 text-red-200 hover:bg-red-600 hover:text-white">মুছুন</button>
+              </div>
+            </div>
+          `).join('') || '<p class="text-xs text-ivory/50">কোনো কম্বো প্যাক তৈরি হয়নি।</p>'}
+        </div>
+      </div>
+
+      <!-- B. BUNDLE ORDERS APPROVAL -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-2.5">
+        <h3 class="font-bold text-sm text-amber-300">২. কম্বো প্যাক অর্ডারসমূহ (${window._adminPhase2Cache.bundleOrders.length})</h3>
+        ${window._adminPhase2Cache.bundleOrders.map((o) => `
+          <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="space-y-0.5">
+              <div><strong>${escapeHtml(o.store_bundles?.title || 'Bundle')}</strong> — ${escapeHtml(o.buyer_name)} (WA: ${escapeHtml(o.whatsapp_number)})</div>
+              <div class="text-ivory/65 font-mono">Txn: ${escapeHtml(o.transaction_id)} | Paid: ₹${o.final_amount_inr}${o.wallet_used_inr ? ` | Wallet: ₹${o.wallet_used_inr}` : ''}${o.referral_code_used ? ` | Ref: ${escapeHtml(o.referral_code_used)}` : ''}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-full bg-midnight text-antiqueGold uppercase text-[10px]">${o.status}</span>
+              ${o.status === 'pending' ? `
+                <button onclick="adminApproveBundleOrder('${o.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold">অ্যাপ্রুভ ও সব বই আনলক</button>
+                <button onclick="adminRejectBundleOrder('${o.id}')" class="px-2.5 py-1.5 rounded-lg bg-red-600/25 text-red-200">বাতিল</button>
+              ` : ''}
+            </div>
+          </div>
+        `).join('') || '<p class="text-xs text-ivory/50">কোনো কম্বো অর্ডার নেই।</p>'}
+      </div>
+
+      <!-- C. GIFT E-BOOK ORDERS APPROVAL -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-2.5">
+        <h3 class="font-bold text-sm text-amber-300">৩. গিফট ই-বুক অর্ডার ও কোড ম্যানেজার (${window._adminPhase2Cache.gifts.length})</h3>
+        ${window._adminPhase2Cache.gifts.map((g) => `
+          <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="space-y-0.5">
+              <div><strong>${escapeHtml(g.ebooks?.title || 'E-Book')}</strong> • ক্রেতা: ${escapeHtml(g.buyer_name)} (${escapeHtml(g.buyer_whatsapp)}) → প্রাপক: ${escapeHtml(g.recipient_name)}</div>
+              <div class="text-ivory/65 font-mono">Txn: ${escapeHtml(g.transaction_id)} | ₹${g.amount_inr}${g.gift_code ? ` | Code: <strong class="text-emerald-300">${escapeHtml(g.gift_code)}</strong> ${g.is_redeemed ? '(রিডিম সম্পন্ন)' : '(অব্যবহৃত)'}` : ''}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              ${g.status === 'pending' ? `
+                <button onclick="adminApproveGiftOrder('${g.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold">অ্যাপ্রুভ ও কোড তৈরি</button>
+                <button onclick="adminRejectGiftOrder('${g.id}')" class="px-2.5 py-1.5 rounded-lg bg-red-600/25 text-red-200">বাতিল</button>
+              ` : g.status === 'approved' && g.gift_code ? `
+                <button onclick="adminSendGiftCodeToBuyerWA('${g.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white">ক্রেতাকে WhatsApp-এ কোড পাঠান</button>
+              ` : `<span class="text-red-300 uppercase text-[10px]">${g.status}</span>`}
+            </div>
+          </div>
+        `).join('') || '<p class="text-xs text-ivory/50">কোনো গিফট অর্ডার নেই।</p>'}
+      </div>
+
+      <!-- D. REFERRAL & WALLET SETTINGS + PENDING BONUS PAYOUTS -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-bold text-sm text-amber-300">৪. রেফারেল ও ওয়ালেট ক্রেডিট সেটিংস</h3>
+          <div class="flex items-center gap-4 text-xs">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="adm-ref-en" type="checkbox" ${cfg.referral_enabled !== false ? 'checked' : ''} class="accent-amber-400" />
+              <span>রেফারেল চালু</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input id="adm-gift-en" type="checkbox" ${cfg.gift_ebook_enabled !== false ? 'checked' : ''} class="accent-amber-400" />
+              <span>ই-বুক গিফট চালু</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          <div>
+            <label class="text-[11px] text-ivory/65">বন্ধুর ডিসকাউন্ট (%)</label>
+            <input id="adm-ref-pct" type="number" value="${Number(cfg.referral_friend_discount_pct ?? 10)}" class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory font-mono" />
+          </div>
+          <div>
+            <label class="text-[11px] text-ivory/65">রেফারার ওয়ালেট বোনাস (₹)</label>
+            <input id="adm-ref-rew" type="number" value="${Number(cfg.referral_referrer_reward_inr ?? 20)}" class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory font-mono" />
+          </div>
+          <div class="flex items-end">
+            <button onclick="adminSaveReferralSettings()" class="w-full py-2 rounded-xl bg-antiqueGold text-midnight font-semibold">সেটিংস সেভ করুন</button>
+          </div>
+        </div>
+
+        <!-- Pending E-Book Referral Rewards -->
+        ${window._adminPhase2Cache.pendingEbookRefRewards.length ? `
+          <div class="pt-2 border-t border-ivory/10 space-y-2 text-xs">
+            <div class="font-semibold text-emerald-300">অ্যাপ্রুভড ই-বুক অর্ডারের বাকি রেফারেল বোনাস:</div>
+            ${window._adminPhase2Cache.pendingEbookRefRewards.map((o) => `
+              <div class="p-2.5 rounded-xl bg-emerald-950/35 border border-emerald-500/35 flex flex-wrap items-center justify-between gap-2">
+                <span>ক্রেতা: <strong>${escapeHtml(o.buyer_name)}</strong> (${escapeHtml(o.ebooks?.title || 'E-Book')}) • রেফারেল কোড: <strong class="font-mono text-antiqueGold">${escapeHtml(o.referral_code_used)}</strong></span>
+                <button onclick="adminPayoutEbookReferral('${o.id}', '${escapeHtml(o.referral_code_used)}', '${escapeHtml(o.buyer_name)}')" class="px-3 py-1 rounded-lg bg-emerald-600 text-white font-semibold">₹${Number(cfg.referral_referrer_reward_inr ?? 20)} বোনাস দিন</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <!-- Manual Wallet Adjustment -->
+        <div class="pt-2 border-t border-ivory/10 space-y-2 text-xs">
+          <div class="text-ivory/80 font-semibold">ম্যানুয়াল ওয়ালেট ক্রেডিট / ডিডাক্ট (রেফারেল কোড দিয়ে):</div>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input id="adm-wal-code" placeholder="রেফারেল কোড (KVXXXXXX)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory font-mono uppercase" />
+            <input id="adm-wal-amt" type="number" placeholder="টাকা (+50 বা -20)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory font-mono" />
+            <input id="adm-wal-note" placeholder="কারণ (যেমন: কনটেস্ট পুরস্কার)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+            <button onclick="adminAdjustWallet()" class="px-3 py-2 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold">ওয়ালেট আপডেট</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// Admin Actions for Phase 2
+async function adminCreateBundle() {
+  const title = (document.getElementById('adm-bn-title')?.value || '').trim();
+  const cover_image_url = (document.getElementById('adm-bn-cover')?.value || '').trim();
+  const original_price_inr = Number(document.getElementById('adm-bn-orig')?.value || 0);
+  const bundle_price_inr = Number(document.getElementById('adm-bn-price')?.value || 0);
+  const description = (document.getElementById('adm-bn-desc')?.value || '').trim();
+  const includes_voice_gift = document.getElementById('adm-bn-voice')?.checked || false;
+  const voice_package_label = (document.getElementById('adm-bn-vlabel')?.value || '').trim();
+  const ebook_ids = Array.from(document.querySelectorAll('.adm-bn-eb-chk:checked')).map((el) => el.value);
+
+  if (!title || bundle_price_inr <= 0 || (!ebook_ids.length && !includes_voice_gift)) {
+    return showToast('কম্বো নাম, অফার দাম এবং অন্তত ১টি ই-বুক বা ভয়েস গিফট সিলেক্ট করুন।', 'error');
+  }
+
+  const { error } = await sb.from('store_bundles').insert({
+    title, description, cover_image_url, ebook_ids, includes_voice_gift, voice_package_label,
+    original_price_inr: original_price_inr || bundle_price_inr, bundle_price_inr, is_active: true
+  });
+
+  if (error) return showToast('কম্বো তৈরি ব্যর্থ: ' + error.message, 'error');
+  showToast('নতুন কম্বো প্যাক তৈরি হয়েছে!', 'success');
+  await loadPhase2PublicData();
+  loadAdminPhase2Panel();
+}
+
+async function adminToggleBundle(id, nextState) {
+  const { error } = await sb.from('store_bundles').update({ is_active: nextState }).eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  await loadPhase2PublicData();
+  loadAdminPhase2Panel();
+}
+
+async function adminDeleteBundle(id) {
+  const { error } = await sb.from('store_bundles').delete().eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  showToast('কম্বো প্যাক মুছে ফেলা হয়েছে।', 'success');
+  await loadPhase2PublicData();
+  loadAdminPhase2Panel();
+}
+
+async function adminApproveBundleOrder(orderId) {
+  const o = (window._adminPhase2Cache?.bundleOrders || []).find((x) => x.id === orderId);
+  if (!o) return;
+
+  const { error } = await sb.from('bundle_orders').update({ status: 'approved' }).eq('id', orderId);
+  if (error) return showToast('অ্যাপ্রুভ ব্যর্থ: ' + error.message, 'error');
+
+  // Bundle-er sob E-Book user-er jonno auto-unlock (ebook_orders-e approved entry)
+  const ebookIds = o.store_bundles?.ebook_ids || [];
+  for (const ebId of ebookIds) {
+    const { data: existing } = await sb
+      .from('ebook_orders')
+      .select('id')
+      .eq('user_id', o.user_id)
+      .eq('ebook_id', ebId)
+      .eq('status', 'approved')
+      .maybeSingle();
+
+    if (!existing) {
+      await sb.from('ebook_orders').insert({
+        user_id: o.user_id,
+        ebook_id: ebId,
+        buyer_name: o.buyer_name,
+        buyer_email: o.buyer_email,
+        whatsapp_number: o.whatsapp_number,
+        transaction_id: 'BUNDLE-' + o.transaction_id,
+        final_amount_inr: 0,
+        status: 'approved'
+      });
+    }
+  }
+
+  // Referral code thakle referrer-ke auto wallet bonus dewa
+  if (o.referral_code_used && !o.referral_rewarded) {
+    const { data: rRes } = await sb.rpc('reward_referrer_for_code', {
+      p_code: o.referral_code_used,
+      p_buyer_name: o.buyer_name
+    });
+    if (rRes?.ok) {
+      await sb.from('bundle_orders').update({ referral_rewarded: true }).eq('id', orderId);
+    }
+  }
+
+  showToast('কম্বো অ্যাপ্রুভ হয়েছে এবং সব ই-বুক ইউজারের জন্য আনলক হয়েছে!', 'success');
+  loadAdminPhase2Panel();
+}
+
+async function adminRejectBundleOrder(orderId) {
+  const { error } = await sb.from('bundle_orders').update({ status: 'rejected' }).eq('id', orderId);
+  if (error) return showToast(error.message, 'error');
+  showToast('কম্বো অর্ডার বাতিল করা হয়েছে।', 'info');
+  loadAdminPhase2Panel();
+}
+
+async function adminApproveGiftOrder(giftId) {
+  const code = 'KV-GIFT-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  const { error } = await sb
+    .from('ebook_gifts')
+    .update({ status: 'approved', gift_code: code })
+    .eq('id', giftId);
+
+  if (error) return showToast('গিফট অ্যাপ্রুভ ব্যর্থ: ' + error.message, 'error');
+  showToast(`গিফট অ্যাপ্রুভ হয়েছে! ইউনিক কোড: ${code}`, 'success');
+  loadAdminPhase2Panel();
+}
+
+async function adminRejectGiftOrder(giftId) {
+  const { error } = await sb.from('ebook_gifts').update({ status: 'rejected' }).eq('id', giftId);
+  if (error) return showToast(error.message, 'error');
+  showToast('গিফট অর্ডার বাতিল করা হয়েছে।', 'info');
+  loadAdminPhase2Panel();
+}
+
+function adminSendGiftCodeToBuyerWA(giftId) {
+  const g = (window._adminPhase2Cache?.gifts || []).find((x) => x.id === giftId);
+  if (!g || !g.gift_code) return;
+  const wa = typeof formatIndianWA === 'function' ? formatIndianWA(g.buyer_whatsapp) : '';
+  const msg = `নমস্কার ${g.buyer_name},\n\n${g.recipient_name}-এর জন্য আপনার "${g.ebooks?.title || 'ই-বুক'}" গিফট অর্ডারটি অ্যাপ্রুভ হয়েছে! 🎉\n\n*গিফট রিডিম কোড:* ${g.gift_code}\n\nএই কোডটি প্রিয়জনকে পাঠিয়ে দিন। KothaVerse Store → "গিফট ও রেফারেল" ট্যাবে কোডটি দিলেই বইটি আনলক হয়ে যাবে।`;
+  window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+async function adminSaveReferralSettings() {
+  const payload = {
+    referral_enabled: document.getElementById('adm-ref-en')?.checked ?? true,
+    gift_ebook_enabled: document.getElementById('adm-gift-en')?.checked ?? true,
+    referral_friend_discount_pct: Math.max(0, Number(document.getElementById('adm-ref-pct')?.value || 10)),
+    referral_referrer_reward_inr: Math.max(0, Number(document.getElementById('adm-ref-rew')?.value || 20))
+  };
+
+  const { error } = await sb.from('store_settings').update(payload).eq('id', 1);
+  if (error) return showToast('সেভ ব্যর্থ: ' + error.message, 'error');
+
+  state.storeSettings = { ...(state.storeSettings || {}), ...payload };
+  showToast('রেফারেল ও গিফট সেটিংস আপডেট হয়েছে!', 'success');
+}
+
+async function adminPayoutEbookReferral(orderId, refCode, buyerName) {
+  const { data, error } = await sb.rpc('reward_referrer_for_code', {
+    p_code: refCode,
+    p_buyer_name: buyerName
+  });
+  if (error || !data?.ok) return showToast(data?.msg || error?.message || 'বোনাস দেওয়া ব্যর্থ।', 'error');
+
+  await sb.from('ebook_orders').update({ referral_rewarded: true }).eq('id', orderId);
+  showToast(`রেফারারের ওয়ালেটে ₹${data.reward_inr} বোনাস জমা হয়েছে!`, 'success');
+  loadAdminPhase2Panel();
+}
+
+async function adminAdjustWallet() {
+  const code = (document.getElementById('adm-wal-code')?.value || '').trim().toUpperCase();
+  const amt = Number(document.getElementById('adm-wal-amt')?.value || 0);
+  const note = (document.getElementById('adm-wal-note')?.value || '').trim();
+  if (!code || !amt) return showToast('সঠিক রেফারেল কোড ও টাকার পরিমাণ দিন।', 'error');
+
+  const { data, error } = await sb.rpc('admin_adjust_wallet_by_code', {
+    p_ref_code: code,
+    p_amount: amt,
+    p_note: note
+  });
+  if (error || !data?.ok) return showToast(data?.msg || error?.message || 'আপডেট ব্যর্থ।', 'error');
+
+  showToast('ইউজারের ওয়ালেট ব্যালেন্স আপডেট হয়েছে!', 'success');
+  document.getElementById('adm-wal-amt').value = '';
+  document.getElementById('adm-wal-note').value = '';
+}
+// =========================================================================
+// GLOBAL UPI & QR CODE ENGINE (DB-SYNCED FOR ALL ORDERS)
+// =========================================================================
+async function loadStoreSettingsFromDB() {
+  const { data, error } = await sb
+    .from('store_settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (!error && data) {
+    state.storeSettings = { ...(state.storeSettings || {}), ...data };
+  }
+}
+
+// Reusable QR Box (Newsletter ba onno jekono payment page-e 1 line-e bosanor jonno)
+function renderUniversalUpiQrBox(amountLabel = '') {
+  const cfg = state.storeSettings || {};
+  const upiId = cfg.upi_id || 'kothaverse@upi';
+  const upiName = cfg.upi_name || 'KothaVerse';
+  const qrUrl = cfg.qr_image_url || '';
+
+  return `
+    <div class="p-4 rounded-2xl bg-deepPurple/45 border border-antiqueGold/30 text-xs font-bengali flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="space-y-1.5 text-center sm:text-left">
+        <div class="text-antiqueGold font-semibold">UPI পেমেন্ট তথ্য (${escapeHtml(upiName)})</div>
+        <div>
+          UPI ID: <strong class="font-mono text-ivory">${escapeHtml(upiId)}</strong>
+          <button type="button" onclick="copyTextToClipboard('${escapeHtml(upiId)}')" class="ml-1.5 px-2 py-0.5 rounded bg-midnight text-antiqueGold text-[10px] border border-antiqueGold/30">কপি</button>
+        </div>
+        ${amountLabel ? `<div>প্রদেয় পরিমাণ: <strong class="text-base text-antiqueGold font-mono">${escapeHtml(amountLabel)}</strong></div>` : ''}
+        <div class="text-[11px] text-ivory/65">QR কোড স্ক্যান করে বা UPI ID-তে পেমেন্ট করে Transaction ID দিন।</div>
+      </div>
+      ${qrUrl ? `
+        <div class="shrink-0 text-center space-y-1">
+          <img src="${escapeHtml(qrUrl)}" alt="KothaVerse UPI QR" class="w-32 h-32 rounded-xl border-2 border-antiqueGold/50 bg-white p-1.5 object-contain mx-auto shadow-gold" />
+          <div class="text-[10px] text-antiqueGold/85">স্ক্যান করে পেমেন্ট করুন</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// Admin Panel: UPI ID + QR Upload -> Direct Supabase Database Save
+function loadAdminUpiQrManager(containerId = 'admin-upi-qr-controls') {
+  const box = document.getElementById(containerId);
+  if (!box || state.profile?.role !== 'admin') return;
+
+  const cfg = state.storeSettings || {};
+  window._draftQrImageData = cfg.qr_image_url || '';
+
+  box.innerHTML = `
+    <div class="mb-6 p-4 sm:p-5 rounded-2xl bg-midnight/75 border border-antiqueGold/35 space-y-4 font-bengali">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 class="text-base font-bold text-antiqueGold flex items-center gap-2">
+            <i data-lucide="qr-code" class="w-5 h-5"></i> গ্লোবাল UPI ও পেমেন্ট QR কোড ম্যানেজার
+          </h3>
+          <p class="text-[11px] text-ivory/65 mt-0.5">এখানে QR কোড আপলোড করে সেভ করলেই E-Book, Voice, Combo, Gift ও Newsletter—সব পেমেন্ট স্ক্রিনে একসাথে দেখাবে।</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+        <div class="md:col-span-8 space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-[11px] text-ivory/70">UPI ID*</label>
+              <input id="adm-qr-upi-id" type="text" value="${escapeHtml(cfg.upi_id || '')}" placeholder="yourname@okaxis" class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory font-mono" />
+            </div>
+            <div>
+              <label class="text-[11px] text-ivory/70">প্রাপকের নাম (UPI Name)</label>
+              <input id="adm-qr-upi-name" type="text" value="${escapeHtml(cfg.upi_name || 'KothaVerse')}" placeholder="KothaVerse" class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[11px] text-ivory/70">QR কোডের ছবি আপলোড করুন (ফোন বা ল্যাপটপ থেকে):</label>
+            <input id="adm-qr-file" type="file" accept="image/*" onchange="adminHandleQrFileUpload(event)" class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-antiqueGold file:text-midnight file:font-semibold cursor-pointer" />
+          </div>
+
+          <div>
+            <label class="text-[11px] text-ivory/70">অথবা ছবির সরাসরি লিংক দিন (ঐচ্ছিক):</label>
+            <input id="adm-qr-url" type="url" value="${cfg.qr_image_url && !cfg.qr_image_url.startsWith('data:') ? escapeHtml(cfg.qr_image_url) : ''}" oninput="adminPreviewQrFromUrl(this.value)" placeholder="https://..." class="w-full mt-1 px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          </div>
+
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button type="button" onclick="adminSaveUpiQrToDB()" class="px-5 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold hover:opacity-90 transition">
+              ডাটাবেজে QR ও UPI সেভ করুন
+            </button>
+            <button type="button" onclick="adminRemoveQrCode()" class="px-3.5 py-2 rounded-xl bg-red-600/20 border border-red-400/35 text-red-200 hover:bg-red-600 hover:text-white transition">
+              QR মুছুন
+            </button>
+          </div>
+        </div>
+
+        <div class="md:col-span-4 flex flex-col items-center justify-center p-4 rounded-2xl bg-deepPurple/35 border border-antiqueGold/25">
+          <div class="text-[11px] text-antiqueGold mb-2 font-semibold">লাইভ QR প্রিভিউ</div>
+          <img id="adm-qr-preview" src="${escapeHtml(cfg.qr_image_url || '')}" alt="QR Preview" class="${cfg.qr_image_url ? '' : 'hidden'} w-36 h-36 rounded-xl bg-white p-1.5 object-contain border border-antiqueGold/40" />
+          <div id="adm-qr-empty" class="${cfg.qr_image_url ? 'hidden' : ''} text-[11px] text-ivory/50 text-center py-8">কোনো QR কোড সেট করা নেই</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function adminHandleQrFileUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      // Compress & resize to crisp 450x450 max so DB saves instantly
+      const maxDim = 450;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        const ratio = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      window._draftQrImageData = compressedDataUrl;
+
+      const prev = document.getElementById('adm-qr-preview');
+      const empty = document.getElementById('adm-qr-empty');
+      if (prev) { prev.src = compressedDataUrl; prev.classList.remove('hidden'); }
+      if (empty) empty.classList.add('hidden');
+      showToast('QR ছবি লোড হয়েছে—এবার "ডাটাবেজে QR ও UPI সেভ করুন" বাটনে ক্লিক করুন।', 'info');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function adminPreviewQrFromUrl(url) {
+  const clean = String(url || '').trim();
+  window._draftQrImageData = clean;
+  const prev = document.getElementById('adm-qr-preview');
+  const empty = document.getElementById('adm-qr-empty');
+  if (clean) {
+    if (prev) { prev.src = clean; prev.classList.remove('hidden'); }
+    if (empty) empty.classList.add('hidden');
+  } else {
+    if (prev) prev.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+  }
+}
+
+async function adminSaveUpiQrToDB() {
+  const upi_id = (document.getElementById('adm-qr-upi-id')?.value || '').trim();
+  const upi_name = (document.getElementById('adm-qr-upi-name')?.value || 'KothaVerse').trim();
+  const qr_image_url = window._draftQrImageData || '';
+
+  if (!upi_id) return showToast('দয়া করে সঠিক UPI ID লিখুন।', 'error');
+
+  const { error } = await sb
+    .from('store_settings')
+    .upsert({ id: 1, upi_id, upi_name, qr_image_url }, { onConflict: 'id' });
+
+  if (error) return showToast('সেভ ব্যর্থ: ' + error.message, 'error');
+
+  state.storeSettings = { ...(state.storeSettings || {}), upi_id, upi_name, qr_image_url };
+  showToast('QR কোড ও UPI তথ্য ডাটাবেজে সেভ হয়েছে! এখন সব অর্ডারে দেখাবে।', 'success');
+}
+
+async function adminRemoveQrCode() {
+  window._draftQrImageData = '';
+  const { error } = await sb.from('store_settings').update({ qr_image_url: '' }).eq('id', 1);
+  if (error) return showToast(error.message, 'error');
+  if (state.storeSettings) state.storeSettings.qr_image_url = '';
+  showToast('QR কোড সরানো হয়েছে।', 'info');
+  loadAdminUpiQrManager();
+}
+// =========================================================================
+// OPTION 2: 0% FEE GATEWAY-STYLE UPI POPUP (BACK = AUTO CANCEL)
+// =========================================================================
+let _kvPaySession = null;
+let _kvPayTimerId = null;
+let _kvPayPushedHistory = false;
+let _kvPayIgnorePop = false;
+
+window.addEventListener('popstate', () => {
+  if (_kvPayIgnorePop) {
+    _kvPayIgnorePop = false;
+    return;
+  }
+  if (_kvPaySession) {
+    _kvPayPushedHistory = false; // Browser back already popped the state
+    closeUpiGatewayPopup(false, 'ব্যাক বাটন চাপায় পেমেন্ট বাতিল করা হয়েছে।');
+  }
+});
+
+function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVerse Order', onSuccess, onCancel }) {
+  const finalAmount = Math.max(0, Math.round(Number(amount || 0)));
+
+  // Jodi coupon/wallet diye 100% discount (₹0) hoy -> direct confirm
+  if (finalAmount <= 0) {
+    if (typeof onSuccess === 'function') {
+      onSuccess('FREE-' + Date.now().toString().slice(-6));
+    }
+    return;
+  }
+
+  const cfg = state.storeSettings || {};
+  const upiId = cfg.upi_id || 'kothaverse@upi';
+  const upiName = cfg.upi_name || 'KothaVerse';
+  const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${finalAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
+
+  // Admin DB theke load kora QR thakle seta, nahole exact-amount auto QR
+  const autoQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(upiDeepLink)}`;
+  const primaryQrUrl = cfg.qr_image_url || autoQrUrl;
+
+  let modal = document.getElementById('kv-upi-gateway-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-upi-gateway-modal';
+    modal.className = 'fixed inset-0 z-[110] bg-black/85 backdrop-blur-md hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  _kvPaySession = { onSuccess, onCancel, amount: finalAmount, submitted: false };
+
+  // Browser history-te state push (jate Back chaplei purchase cancel hoy)
+  try {
+    history.pushState({ kvUpiGateway: true }, '', window.location.href);
+    _kvPayPushedHistory = true;
+  } catch (e) {
+    _kvPayPushedHistory = false;
+  }
+
+  modal.innerHTML = `
+    <div class="w-full max-w-md rounded-3xl bg-midnight border border-antiqueGold/45 shadow-card overflow-hidden font-bengali my-auto fade-in">
+      <!-- Gateway Top Header -->
+      <div class="px-5 py-4 bg-gradient-to-r from-deepPurple via-midnight to-deepPurple border-b border-antiqueGold/25 flex items-center justify-between gap-3">
+        <div>
+          <div class="text-[10px] uppercase tracking-widest text-antiqueGold font-semibold flex items-center gap-1.5">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> KothaVerse Secure UPI Pay
+          </div>
+          <h3 class="text-sm sm:text-base font-bold text-ivory mt-0.5 line-clamp-1">${escapeHtml(title)}</h3>
+          ${subtitle ? `<p class="text-[11px] text-ivory/65 line-clamp-1">${escapeHtml(subtitle)}</p>` : ''}
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-xl font-mono font-bold text-antiqueGold">₹${finalAmount}</div>
+          <div id="kv-gw-timer" class="text-[11px] font-mono text-amber-300">05:00</div>
+        </div>
+      </div>
+
+      <!-- Gateway Body -->
+      <div id="kv-gw-body" class="p-5 space-y-4">
+        <!-- QR Code Box -->
+        <div class="p-4 rounded-2xl bg-deepPurple/35 border border-antiqueGold/25 flex flex-col items-center text-center space-y-2.5">
+          <img id="kv-gw-qr-img" src="${escapeHtml(primaryQrUrl)}" alt="KothaVerse UPI QR" class="w-44 h-44 rounded-2xl bg-white p-2 object-contain border-2 border-antiqueGold/50 shadow-gold" />
+          <div class="text-xs text-ivory/90">
+            যেকোনো UPI অ্যাপ দিয়ে স্ক্যান করে ঠিক <strong class="text-antiqueGold font-mono">₹${finalAmount}</strong> পেমেন্ট করুন
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2 text-[11px]">
+            <span class="px-2.5 py-1 rounded-lg bg-midnight border border-antiqueGold/25 font-mono text-ivory/90">${escapeHtml(upiId)}</span>
+            <button type="button" onclick="copyTextToClipboard('${escapeHtml(upiId)}')" class="px-2.5 py-1 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold transition">কপি</button>
+          </div>
+          <a href="${upiDeepLink}" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition">
+            <i data-lucide="smartphone" class="w-4 h-4"></i> সরাসরি UPI অ্যাপে পে করুন (GPay / PhonePe / Paytm)
+          </a>
+        </div>
+
+        <!-- UTR Verification Form -->
+        <form onsubmit="handleGatewayPaymentConfirm(event)" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-ivory/80 mb-1">পেমেন্ট সম্পন্ন হলে ১২ সংখ্যার UPI Transaction ID / UTR দিন:</label>
+            <input id="kv-gw-utr" required minlength="8" autocomplete="off" placeholder="যেমন: 432198765432" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/35 text-sm text-ivory font-mono focus:border-antiqueGold outline-none" />
+          </div>
+          <div class="flex gap-2.5 pt-1">
+            <button type="button" onclick="closeUpiGatewayPopup(false, 'আপনি পেমেন্ট বাতিল করেছেন।')" class="px-4 py-3 rounded-xl bg-red-600/20 border border-red-400/35 text-red-200 hover:bg-red-600 hover:text-white text-xs font-semibold transition">
+              বাতিল করুন
+            </button>
+            <button id="kv-gw-submit-btn" type="submit" class="flex-1 py-3 rounded-xl bg-antiqueGold text-midnight font-bold text-xs shadow-gold hover:opacity-95 transition">
+              পেমেন্ট সম্পন্ন — নিশ্চিত করুন
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (window.lucide) lucide.createIcons();
+
+  // 5-minute countdown timer
+  startUpiGatewayTimer(300);
+}
+
+function startUpiGatewayTimer(seconds) {
+  if (_kvPayTimerId) clearInterval(_kvPayTimerId);
+  let remaining = seconds;
+
+  const tick = () => {
+    const el = document.getElementById('kv-gw-timer');
+    if (!el || !_kvPaySession) return clearInterval(_kvPayTimerId);
+
+    const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const s = String(remaining % 60).padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+
+    if (remaining <= 0) {
+      clearInterval(_kvPayTimerId);
+      closeUpiGatewayPopup(false, 'সময় শেষ! পেমেন্ট বাতিল করা হয়েছে।');
+      return;
+    }
+    remaining--;
+  };
+
+  tick();
+  _kvPayTimerId = setInterval(tick, 1000);
+}
+
+async function handleGatewayPaymentConfirm(e) {
+  e.preventDefault();
+  if (!_kvPaySession || _kvPaySession.submitted) return;
+
+  const utr = (document.getElementById('kv-gw-utr')?.value || '').trim();
+  if (utr.length < 8) {
+    return showToast('দয়া করে সঠিক UPI Transaction ID / UTR লিখুন।', 'error');
+  }
+
+  _kvPaySession.submitted = true;
+  if (_kvPayTimerId) clearInterval(_kvPayTimerId);
+
+  const body = document.getElementById('kv-gw-body');
+  if (body) {
+    body.innerHTML = `
+      <div class="py-10 text-center space-y-3">
+        <div class="w-12 h-12 rounded-full border-4 border-antiqueGold/30 border-t-antiqueGold animate-spin mx-auto"></div>
+        <div class="text-sm font-bold text-antiqueGold">পেমেন্ট তথ্য যাচাই ও সংরক্ষণ হচ্ছে...</div>
+        <div class="text-xs text-ivory/65 font-mono">UTR: ${escapeHtml(utr)}</div>
+      </div>
+    `;
+  }
+
+  const session = _kvPaySession;
+
+  try {
+    if (typeof session.onSuccess === 'function') {
+      await session.onSuccess(utr);
+    }
+
+    if (body) {
+      body.innerHTML = `
+        <div class="py-10 text-center space-y-2.5">
+          <div class="w-14 h-14 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 flex items-center justify-center mx-auto text-2xl">✓</div>
+          <div class="text-base font-bold text-emerald-300">অর্ডার সফলভাবে গৃহীত হয়েছে!</div>
+          <div class="text-xs text-ivory/70">পপ-আপ স্বয়ংক্রিয়ভাবে বন্ধ হচ্ছে...</div>
+        </div>
+      `;
+    }
+
+    setTimeout(() => closeUpiGatewayPopup(true), 1200);
+  } catch (err) {
+    _kvPaySession.submitted = false;
+    closeUpiGatewayPopup(false, 'অর্ডার সংরক্ষণে ত্রুটি: ' + (err?.message || 'আবার চেষ্টা করুন'));
+  }
+}
+
+function closeUpiGatewayPopup(isSuccess = false, cancelMessage = '') {
+  if (_kvPayTimerId) {
+    clearInterval(_kvPayTimerId);
+    _kvPayTimerId = null;
+  }
+
+  const modal = document.getElementById('kv-upi-gateway-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  const session = _kvPaySession;
+  _kvPaySession = null;
+
+  // Clean up pushed browser history state silently
+  if (_kvPayPushedHistory) {
+    _kvPayPushedHistory = false;
+    _kvPayIgnorePop = true;
+    try { history.back(); } catch (e) {}
+    setTimeout(() => { _kvPayIgnorePop = false; }, 350);
+  }
+
+  if (!isSuccess) {
+    if (cancelMessage) showToast(cancelMessage, 'error');
+    if (session && typeof session.onCancel === 'function') {
+      session.onCancel();
+    }
+  }
+}
+// =========================================================================
+// PHASE 3: LIVE ORDER TRACKING, BRANDED INVOICE PDF & VERIFIED REVIEWS
+// =========================================================================
+window.kvPhase3 = {
+  reviews: []
+};
+
+const KV_TRACK_STEPS = [
+  { key: 'submitted', label: 'পেমেন্ট জমা', icon: 'receipt' },
+  { key: 'verified', label: 'যাচাই সম্পন্ন', icon: 'shield-check' },
+  { key: 'preparing', label: 'প্রস্তুত হচ্ছে', icon: 'sparkles' },
+  { key: 'delivered', label: 'ডেলিভারি সম্পন্ন', icon: 'check-circle-2' }
+];
+
+async function loadPhase3PublicData() {
+  const { data } = await sb
+    .from('store_reviews')
+    .select('*')
+    .eq('is_visible', true)
+    .order('created_at', { ascending: false });
+  window.kvPhase3.reviews = data || [];
+}
+
+function resolveOrderStage(order, orderType) {
+  if (!order) return 'submitted';
+  if (order.status === 'rejected' || order.tracking_stage === 'rejected') return 'rejected';
+  if (order.tracking_stage && ['submitted', 'verified', 'preparing', 'delivered'].includes(order.tracking_stage)) {
+    return order.tracking_stage;
+  }
+  if (orderType === 'voice') {
+    if (order.delivery_audio_url) return 'delivered';
+    if (order.status === 'approved') return 'preparing';
+    return 'submitted';
+  }
+  return order.status === 'approved' ? 'delivered' : 'submitted';
+}
+
+function isOrderInvoiceReady(order, orderType) {
+  const st = resolveOrderStage(order, orderType);
+  return order.status === 'approved' || ['verified', 'preparing', 'delivered'].includes(st);
+}
+
+// -------------------------------------------------------------------------
+// 1. LIVE ORDER TRACKING TIMELINE UI
+// -------------------------------------------------------------------------
+function renderOrderTimelineBar(order, orderType) {
+  const stage = resolveOrderStage(order, orderType);
+
+  if (stage === 'rejected') {
+    return `
+      <div class="p-3 rounded-xl bg-red-950/45 border border-red-500/40 text-xs text-red-200 font-bengali">
+        <strong>অর্ডার বাতিল হয়েছে:</strong> ${escapeHtml(order.tracking_note || 'পেমেন্ট যাচাই করা যায়নি। প্রয়োজনে সাপোর্টে যোগাযোগ করুন।')}
+      </div>
+    `;
+  }
+
+  const activeIdx = Math.max(0, KV_TRACK_STEPS.findIndex((s) => s.key === stage));
+  const prepLabel = orderType === 'voice' ? 'রেকর্ডিং চলছে' : 'PDF প্রস্তুত';
+
+  return `
+    <div class="space-y-2 pt-1">
+      <div class="grid grid-cols-4 gap-1.5 sm:gap-2">
+        ${KV_TRACK_STEPS.map((st, idx) => {
+          const done = idx <= activeIdx;
+          const isCurrent = idx === activeIdx;
+          const lbl = st.key === 'preparing' ? prepLabel : st.label;
+          return `
+            <div class="flex flex-col items-center text-center gap-1">
+              <div class="w-full h-1.5 rounded-full ${done ? 'bg-antiqueGold' : 'bg-ivory/15'}"></div>
+              <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border ${isCurrent ? 'bg-antiqueGold text-midnight border-antiqueGold shadow-gold' : done ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/50' : 'bg-midnight text-ivory/40 border-ivory/15'}">
+                ${done ? '✓' : idx + 1}
+              </div>
+              <span class="text-[10px] leading-tight ${done ? 'text-ivory font-semibold' : 'text-ivory/45'}">${lbl}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      ${order.tracking_note ? `
+        <div class="text-[11px] px-3 py-1.5 rounded-lg bg-deepPurple/45 border border-antiqueGold/20 text-amber-200">
+          <strong>আপডেট:</strong> ${escapeHtml(order.tracking_note)}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderStoreMyOrdersTab() {
+  if (!state.user) {
+    return `
+      <div class="glass-panel rounded-3xl p-10 text-center space-y-4 font-bengali border border-antiqueGold/25">
+        <i data-lucide="package-search" class="w-10 h-10 text-antiqueGold mx-auto"></i>
+        <h3 class="text-xl font-bold text-ivory">আপনার অর্ডার ট্র্যাকিং ও ইনভয়েস</h3>
+        <p class="text-xs text-ivory/70">লাইভ অর্ডার স্ট্যাটাস দেখতে এবং UPI রসিদ PDF ডাউনলোড করতে লগইন করুন।</p>
+        <button onclick="openAuthModal('login')" class="px-6 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs shadow-gold">লগইন করুন</button>
+      </div>
+    `;
+  }
+
+  const ebOrders = (state.myEbookOrders || []).map((o) => {
+    const book = (state.ebooks || []).find((b) => b.id === o.ebook_id);
+    return {
+      ...o,
+      _type: 'ebook',
+      _typeLabel: 'ই-বুক',
+      _title: book?.title || 'KothaVerse ই-বুক',
+      _targetId: o.ebook_id,
+      _paidAmount: o.final_amount_inr ?? book?.price_inr ?? 0
+    };
+  });
+
+  const vcOrders = (state.myVoiceOrders || []).map((o) => ({
+    ...o,
+    _type: 'voice',
+    _typeLabel: 'কাস্টম ভয়েস গিফট',
+    _title: `${o.receiver_name}-এর জন্য ${o.package_name}`,
+    _targetId: 'voice_dedication',
+    _paidAmount: o.final_amount_inr ?? o.amount_inr ?? 0
+  }));
+
+  const bnOrders = (window.kvPhase2?.myBundleOrders || []).map((o) => ({
+    ...o,
+    _type: 'bundle',
+    _typeLabel: 'কম্বো প্যাক',
+    _title: o.store_bundles?.title || 'KothaVerse কম্বো প্যাক',
+    _targetId: o.bundle_id,
+    _paidAmount: o.final_amount_inr ?? o.store_bundles?.bundle_price_inr ?? 0
+  }));
+
+  const allOrders = [...ebOrders, ...vcOrders, ...bnOrders]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (!allOrders.length) {
+    return `
+      <div class="glass-panel rounded-3xl p-10 text-center text-sm text-ivory/60 font-bengali border border-antiqueGold/20">
+        আপনার এখনও কোনো স্টোর অর্ডার নেই। ই-বুক, কম্বো বা ভয়েস গিফট অর্ডার করলে এখানে লাইভ ট্র্যাক করতে পারবেন।
+      </div>
+    `;
+  }
+
+  const reviewsOn = state.storeSettings?.reviews_enabled !== false;
+
+  return `
+    <div class="space-y-4 font-bengali">
+      ${allOrders.map((o) => {
+        const ready = isOrderInvoiceReady(o, o._type);
+        const dateStr = new Date(o.created_at).toLocaleDateString('bn-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        return `
+          <div class="glass-panel rounded-2xl p-5 border border-antiqueGold/25 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] bg-antiqueGold/15 border border-antiqueGold/35 text-antiqueGold font-semibold">${o._typeLabel}</span>
+                  <span class="text-[11px] text-ivory/55">${dateStr}</span>
+                  <span class="text-[11px] font-mono text-ivory/60">UTR: ${escapeHtml(o.transaction_id || 'N/A')}</span>
+                </div>
+                <h3 class="text-base sm:text-lg font-bold text-ivory">${escapeHtml(o._title)}</h3>
+                <div class="text-xs text-ivory/70">
+                  প্রদেয় মূল্য: <strong class="text-antiqueGold font-mono">₹${o._paidAmount}</strong>
+                  ${o.coupon_code ? ` • কুপন: <span class="text-emerald-300 font-mono">${escapeHtml(o.coupon_code)}</span>` : ''}
+                  ${o.wallet_used_inr ? ` • ওয়ালেট: ₹${o.wallet_used_inr}` : ''}
+                </div>
+              </div>
+
+              <div class="flex flex-wrap gap-2 text-xs">
+                ${ready ? `
+                  <button onclick="downloadOrderInvoicePDF('${o._type}', '${o.id}')" class="px-3.5 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold flex items-center gap-1.5 shadow-gold hover:opacity-90 transition">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Invoice PDF
+                  </button>
+                ` : `
+                  <span class="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/35 text-amber-200 text-[11px]">যাচাই হলে রসিদ আনলক হবে</span>
+                `}
+
+                ${ready && reviewsOn && o._targetId ? `
+                  <button onclick="openProductReviewsModal('${o._type}', '${o._targetId}')" class="px-3.5 py-2 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold flex items-center gap-1.5 transition">
+                    <i data-lucide="star" class="w-3.5 h-3.5"></i> রিভিউ দিন
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            ${renderOrderTimelineBar(o, o._type)}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// -------------------------------------------------------------------------
+// 2. BRANDED INVOICE PDF GENERATOR (High-DPI Canvas -> pdf-lib PDF)
+// -------------------------------------------------------------------------
+function findOrderForInvoice(orderType, orderId) {
+  if (orderType === 'ebook') {
+    const o = (state.myEbookOrders || []).find((x) => x.id === orderId)
+      || (window._adminPhase3Cache?.ebookOrders || []).find((x) => x.id === orderId);
+    if (!o) return null;
+    const book = (state.ebooks || []).find((b) => b.id === o.ebook_id);
+    const title = o.ebooks?.title || book?.title || 'KothaVerse E-Book';
+    const base = Number(o.ebooks?.price_inr ?? book?.price_inr ?? o.final_amount_inr ?? 0);
+    return {
+      invoiceNo: 'KV-EB-' + String(o.id).slice(0, 6).toUpperCase(),
+      date: o.created_at,
+      buyerName: o.buyer_name || state.profile?.full_name || 'KothaVerse Reader',
+      buyerContact: o.whatsapp_number || o.buyer_email || '',
+      itemType: 'Digital E-Book',
+      itemTitle: title,
+      basePrice: base,
+      addonsTotal: 0,
+      discount: Number(o.discount_inr || 0),
+      walletUsed: Number(o.wallet_used_inr || 0),
+      couponCode: o.coupon_code || '',
+      finalPaid: Number(o.final_amount_inr ?? base),
+      utr: o.transaction_id || 'VERIFIED'
+    };
+  }
+
+  if (orderType === 'voice') {
+    const o = (state.myVoiceOrders || []).find((x) => x.id === orderId)
+      || (window._adminPhase3Cache?.voiceOrders || []).find((x) => x.id === orderId);
+    if (!o) return null;
+    return {
+      invoiceNo: 'KV-VC-' + String(o.id).slice(0, 6).toUpperCase(),
+      date: o.created_at,
+      buyerName: o.sender_name || state.profile?.full_name || 'KothaVerse Customer',
+      buyerContact: o.whatsapp_number || '',
+      itemType: 'Custom Voice Dedication',
+      itemTitle: `${o.package_name} (For ${o.receiver_name})`,
+      basePrice: Number(o.amount_inr || 0),
+      addonsTotal: Number(o.addons_total_inr || 0),
+      discount: Number(o.discount_inr || 0),
+      walletUsed: 0,
+      couponCode: o.coupon_code || '',
+      finalPaid: Number(o.final_amount_inr ?? o.amount_inr ?? 0),
+      utr: o.transaction_id || 'VERIFIED'
+    };
+  }
+
+  if (orderType === 'bundle') {
+    const o = (window.kvPhase2?.myBundleOrders || []).find((x) => x.id === orderId)
+      || (window._adminPhase3Cache?.bundleOrders || []).find((x) => x.id === orderId);
+    if (!o) return null;
+    const base = Number(o.store_bundles?.bundle_price_inr ?? o.final_amount_inr ?? 0);
+    return {
+      invoiceNo: 'KV-BN-' + String(o.id).slice(0, 6).toUpperCase(),
+      date: o.created_at,
+      buyerName: o.buyer_name || state.profile?.full_name || 'KothaVerse Reader',
+      buyerContact: o.whatsapp_number || o.buyer_email || '',
+      itemType: 'Combo / Bundle Pack',
+      itemTitle: o.store_bundles?.title || 'KothaVerse Combo Pack',
+      basePrice: base,
+      addonsTotal: 0,
+      discount: Number(o.discount_inr || 0),
+      walletUsed: Number(o.wallet_used_inr || 0),
+      couponCode: o.referral_code_used || '',
+      finalPaid: Number(o.final_amount_inr ?? base),
+      utr: o.transaction_id || 'VERIFIED'
+    };
+  }
+  return null;
+}
+
+// =========================================================================
+// LUXURY GLASSMORPHISM INVOICE PDF (PURPLE + GOLD + WHITE + LOGO + SEAL)
+// =========================================================================
+function _kvRoundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function _kvWrapLines(ctx, text, maxWidth, maxLines = 2) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width <= maxWidth) {
+      current = test;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+      if (lines.length === maxLines - 1) break;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length > maxLines) lines.length = maxLines;
+  return lines.length ? lines : [''];
+}
+
+async function _kvLoadSafeLogo(logoUrl) {
+  if (!logoUrl) return null;
+  try {
+    const resp = await fetch(logoUrl, { mode: 'cors' });
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    return await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(null);
+      };
+      img.src = objUrl;
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function _kvDrawLuxuryPaidSeal(ctx, cx, cy) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.22); // Stylish official stamp tilt
+
+  // Soft outer golden-emerald glow
+  ctx.shadowColor = 'rgba(16, 185, 129, 0.28)';
+  ctx.shadowBlur = 24;
+
+  // 1. Scalloped outer metallic gold seal ring
+  const spikes = 32;
+  const outerR = 112;
+  const innerR = 102;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (i * Math.PI) / spikes;
+    const px = Math.cos(angle) * r;
+    const py = Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  const sealGrad = ctx.createLinearGradient(-110, -110, 110, 110);
+  sealGrad.addColorStop(0, '#065f46');
+  sealGrad.addColorStop(0.5, '#059669');
+  sealGrad.addColorStop(1, '#047857');
+  ctx.fillStyle = sealGrad;
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#f3d27a';
+  ctx.stroke();
+
+  // 2. Inner dashed gold ring
+  ctx.beginPath();
+  ctx.arc(0, 0, 88, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(243, 210, 122, 0.9)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([7, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 3. Inner deep royal purple core circle
+  ctx.beginPath();
+  ctx.arc(0, 0, 76, 0, Math.PI * 2);
+  const coreGrad = ctx.createRadialGradient(-20, -20, 8, 0, 0, 76);
+  coreGrad.addColorStop(0, '#3b1d70');
+  coreGrad.addColorStop(1, '#160b2e');
+  ctx.fillStyle = coreGrad;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#d4af37';
+  ctx.stroke();
+
+  // 4. Top & bottom luxury text + stars
+  ctx.fillStyle = '#f3d27a';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('★  UPI VERIFIED  ★', 0, -34);
+
+  // 5. Center PAID Ribbon Bar
+  ctx.fillStyle = '#10b981';
+  _kvRoundRect(ctx, -64, -22, 128, 44, 10);
+  ctx.fill();
+  ctx.strokeStyle = '#fef3c7';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 28px Georgia, serif';
+  ctx.fillText('PAID ✓', 0, 10);
+
+  // 6. Bottom seal text
+  ctx.fillStyle = '#fde68a';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('KOTHAVERSE OFFICIAL', 0, 44);
+
+  ctx.restore();
+}
+
+async function downloadOrderInvoicePDF(orderType, orderId) {
+  const inv = findOrderForInvoice(orderType, orderId);
+  if (!inv) return showToast('ইনভয়েস তথ্য পাওয়া যায়নি।', 'error');
+
+  const cfg = state.storeSettings || {};
+  const siteCfg = typeof getSiteSettings === 'function' ? getSiteSettings() : {};
+  const tagline = cfg.invoice_brand_tagline || siteCfg.tagline || 'শব্দের পরিপাটে, মনের আলাপন';
+  const support = cfg.invoice_support_contact || 'support@kothaverse.in';
+  const upiId = cfg.upi_id || 'kothaverse@upi';
+  const dateFmt = new Date(inv.date).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  // Auto-detect logo: Admin setting -> Site setting -> Navbar img -> fallback 'logo.png'
+  const domLogoSrc = document.querySelector('header img[src*="logo" i], nav img[src*="logo" i], img[alt*="KothaVerse" i]')?.src || '';
+  const logoCandidate = cfg.invoice_logo_url || siteCfg.logoUrl || domLogoSrc || '20261121_192551.png';
+
+  showToast('প্রিমিয়াম ব্র্যান্ডেড Invoice PDF তৈরি হচ্ছে...', 'info');
+
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const logoImg = await _kvLoadSafeLogo(logoCandidate);
+
+    // Exact A4 Aspect Ratio (150 DPI Crisp Print)
+    const W = 1240;
+    const H = 1754;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // =====================================================================
+    // 1. CREAMY GOLDEN-WHITE BACKGROUND + AMBIENT PURPLE & GOLD GLOW ORBS
+    // =====================================================================
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#fdfbf7');
+    bgGrad.addColorStop(0.5, '#faf5ec');
+    bgGrad.addColorStop(1, '#f4ecff');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Ambient Radial Blobs (Makes the glassmorphism panels pop)
+    const drawOrb = (x, y, r, color) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    drawOrb(180, 260, 420, 'rgba(109, 40, 217, 0.14)');
+    drawOrb(1080, 380, 460, 'rgba(212, 175, 55, 0.18)');
+    drawOrb(220, 1280, 440, 'rgba(212, 175, 55, 0.15)');
+    drawOrb(1020, 1480, 480, 'rgba(88, 28, 135, 0.16)');
+
+    // Outer Luxury Double Gold Border
+    ctx.strokeStyle = 'rgba(200, 158, 58, 0.65)';
+    ctx.lineWidth = 4;
+    _kvRoundRect(ctx, 30, 30, W - 60, H - 60, 26);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(91, 33, 182, 0.22)';
+    ctx.lineWidth = 1.5;
+    _kvRoundRect(ctx, 42, 42, W - 84, H - 84, 20);
+    ctx.stroke();
+
+    // Subtle Center Diagonal Watermark
+    ctx.save();
+    ctx.translate(W / 2, H / 2 + 60);
+    ctx.rotate(-0.42);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(91, 33, 182, 0.04)';
+    ctx.font = 'bold 135px Georgia, serif';
+    ctx.fillText('KothaVerse', 0, 0);
+    ctx.restore();
+
+    // =====================================================================
+    // 2. ROYAL PURPLE + GOLD GLASSMORPHISM HERO HEADER WITH LOGO
+    // =====================================================================
+    const hX = 72;
+    const hY = 74;
+    const hW = W - 144;
+    const hH = 265;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(30, 14, 62, 0.24)';
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetY = 14;
+    _kvRoundRect(ctx, hX, hY, hW, hH, 28);
+    const hdrGrad = ctx.createLinearGradient(hX, hY, hX + hW, hY + hH);
+    hdrGrad.addColorStop(0, '#180c30');
+    hdrGrad.addColorStop(0.55, '#2f155c');
+    hdrGrad.addColorStop(1, '#1b1038');
+    ctx.fillStyle = hdrGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // Glass Shine Overlay on Header
+    ctx.save();
+    _kvRoundRect(ctx, hX, hY, hW, hH, 28);
+    ctx.clip();
+    const shineGrad = ctx.createLinearGradient(hX, hY, hX + 460, hY + hH);
+    shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0.14)');
+    shineGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.03)');
+    shineGrad.addColorStop(1, 'rgba(212, 175, 55, 0.12)');
+    ctx.fillStyle = shineGrad;
+    ctx.fillRect(hX, hY, hW, hH);
+
+    // Subtle decorative gold light arc
+    ctx.beginPath();
+    ctx.arc(hX + hW - 90, hY + 30, 210, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(243, 210, 122, 0.09)';
+    ctx.fill();
+    ctx.restore();
+
+    // Header Metallic Gold Border
+    const goldStroke = ctx.createLinearGradient(hX, hY, hX + hW, hY);
+    goldStroke.addColorStop(0, '#f6e09a');
+    goldStroke.addColorStop(0.5, '#c9972e');
+    goldStroke.addColorStop(1, '#f6e09a');
+    ctx.strokeStyle = goldStroke;
+    ctx.lineWidth = 3;
+    _kvRoundRect(ctx, hX, hY, hW, hH, 28);
+    ctx.stroke();
+
+    // Logo Container (Left Side of Header)
+    const logoCx = hX + 106;
+    const logoCy = hY + hH / 2;
+    const logoR = 64;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoCx, logoCy, logoR + 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(243, 210, 122, 0.18)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#f3d27a';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
+    ctx.clip();
+
+    if (logoImg) {
+      // Fill soft backing then draw uploaded/site logo cleanly
+      ctx.fillStyle = '#140a28';
+      ctx.fillRect(logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2);
+      const scale = Math.min((logoR * 2) / logoImg.width, (logoR * 2) / logoImg.height);
+      const dw = logoImg.width * scale;
+      const dh = logoImg.height * scale;
+      ctx.drawImage(logoImg, logoCx - dw / 2, logoCy - dh / 2, dw, dh);
+    } else {
+      // Fallback Royal Golden KV Monogram Crest
+      const crestGrad = ctx.createLinearGradient(logoCx - logoR, logoCy - logoR, logoCx + logoR, logoCy + logoR);
+      crestGrad.addColorStop(0, '#3f1e78');
+      crestGrad.addColorStop(1, '#120824');
+      ctx.fillStyle = crestGrad;
+      ctx.fillRect(logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2);
+      ctx.fillStyle = '#f3d27a';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 52px Georgia, serif';
+      ctx.fillText('KV', logoCx, logoCy + 18);
+    }
+    ctx.restore();
+
+    // Brand Title + Tagline
+    const brandX = hX + 198;
+    const goldTextGrad = ctx.createLinearGradient(brandX, hY + 60, brandX, hY + 130);
+    goldTextGrad.addColorStop(0, '#fff4cc');
+    goldTextGrad.addColorStop(0.5, '#f0c75e');
+    goldTextGrad.addColorStop(1, '#c89228');
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = goldTextGrad;
+    ctx.font = 'bold 58px Georgia, serif';
+    ctx.fillText('KothaVerse', brandX, hY + 116);
+
+    ctx.fillStyle = '#f5f0e6';
+    ctx.font = '24px "Noto Sans Bengali", sans-serif';
+    ctx.fillText(tagline, brandX, hY + 160);
+
+    // Glass Pill: OFFICIAL PAYMENT RECEIPT
+    ctx.fillStyle = 'rgba(243, 210, 122, 0.16)';
+    _kvRoundRect(ctx, brandX, hY + 182, 315, 36, 18);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243, 210, 122, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#f8e3a3';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('✦  OFFICIAL UPI RECEIPT', brandX + 20, hY + 206);
+
+    // Header Right: Invoice Meta Glass Card
+    const metaW = 290;
+    const metaX = hX + hW - metaW - 32;
+    const metaY = hY + 48;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
+    _kvRoundRect(ctx, metaX, metaY, metaW, 168, 20);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243, 210, 122, 0.38)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#d4b8ff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('INVOICE NUMBER', metaX + metaW - 24, metaY + 38);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 25px monospace';
+    ctx.fillText(inv.invoiceNo, metaX + metaW - 24, metaY + 72);
+
+    ctx.fillStyle = '#d4b8ff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('ISSUE DATE', metaX + metaW - 24, metaY + 112);
+
+    ctx.fillStyle = '#f6e09a';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(dateFmt, metaX + metaW - 24, metaY + 144);
+
+    // =====================================================================
+    // 3. FROSTED GLASS INFO CARDS (BILLED TO + PAYMENT DETAILS)
+    // =====================================================================
+    const drawGlassCard = (x, y, w, h) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(47, 21, 92, 0.09)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 10;
+      _kvRoundRect(ctx, x, y, w, h, 22);
+      const g = ctx.createLinearGradient(x, y, x + w, y + h);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.86)');
+      g.addColorStop(1, 'rgba(252, 248, 240, 0.68)');
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.restore();
+
+      ctx.strokeStyle = 'rgba(205, 164, 62, 0.45)';
+      ctx.lineWidth = 2;
+      _kvRoundRect(ctx, x, y, w, h, 22);
+      ctx.stroke();
+    };
+
+    const cardY = 382;
+    const cardH = 205;
+    const cardGap = 28;
+    const cardW = (hW - cardGap) / 2;
+
+    drawGlassCard(hX, cardY, cardW, cardH);
+    drawGlassCard(hX + cardW + cardGap, cardY, cardW, cardH);
+
+    // Left Card Content: BILLED TO
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#6d28d9';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText('BILLED TO', hX + 30, cardY + 42);
+
+    ctx.fillStyle = '#c8972c';
+    ctx.fillRect(hX + 30, cardY + 54, 48, 3);
+
+    ctx.fillStyle = '#1a1033';
+    ctx.font = 'bold 30px "Noto Sans Bengali", sans-serif';
+    ctx.fillText(String(inv.buyerName).slice(0, 28), hX + 30, cardY + 105);
+
+    ctx.fillStyle = '#4c3f6e';
+    ctx.font = '22px sans-serif';
+    ctx.fillText(`Contact: ${String(inv.buyerContact || 'Registered Reader').slice(0, 32)}`, hX + 30, cardY + 146);
+
+    ctx.fillStyle = '#8b6d24';
+    ctx.font = '19px "Noto Sans Bengali", sans-serif';
+    ctx.fillText('ভেরিফায়েড KothaVerse পাঠক', hX + 30, cardY + 180);
+
+    // Right Card Content: PAYMENT DETAILS
+    const rX = hX + cardW + cardGap;
+    ctx.fillStyle = '#6d28d9';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText('PAYMENT DETAILS', rX + 30, cardY + 42);
+
+    ctx.fillStyle = '#c8972c';
+    ctx.fillRect(rX + 30, cardY + 54, 48, 3);
+
+    ctx.fillStyle = '#1a1033';
+    ctx.font = 'bold 23px monospace';
+    ctx.fillText(`UTR: ${String(inv.utr).slice(0, 24)}`, rX + 30, cardY + 104);
+
+    ctx.fillStyle = '#4c3f6e';
+    ctx.font = '21px sans-serif';
+    ctx.fillText(`UPI ID: ${String(upiId).slice(0, 30)}`, rX + 30, cardY + 144);
+
+    ctx.fillStyle = '#059669';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('●  Status: Verified & Settled', rX + 30, cardY + 180);
+
+    // =====================================================================
+    // 4. GLASSMORPHISM ITEMIZED BILLING TABLE
+    // =====================================================================
+    const tblY = 630;
+    const tblH = 540;
+    drawGlassCard(hX, tblY, hW, tblH);
+
+    // Table Header Bar (Royal Purple Gradient)
+    ctx.save();
+    _kvRoundRect(ctx, hX, tblY, hW, 74, 22);
+    ctx.clip();
+    const tblHdrGrad = ctx.createLinearGradient(hX, tblY, hX + hW, tblY);
+    tblHdrGrad.addColorStop(0, '#221045');
+    tblHdrGrad.addColorStop(1, '#3b1c73');
+    ctx.fillStyle = tblHdrGrad;
+    ctx.fillRect(hX, tblY, hW, 74);
+    ctx.restore();
+
+    // Flatten bottom corners of table header subtly
+    ctx.fillStyle = '#d4af37';
+    ctx.fillRect(hX + 2, tblY + 72, hW - 4, 3);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f6e09a';
+    ctx.font = 'bold 21px sans-serif';
+    ctx.fillText('ITEM DESCRIPTION', hX + 34, tblY + 46);
+
+    ctx.textAlign = 'right';
+    ctx.fillText('AMOUNT (INR)', hX + hW - 34, tblY + 46);
+
+    // Build Rows
+    const rows = [
+      {
+        title: inv.itemTitle,
+        sub: inv.itemType,
+        val: `₹${inv.basePrice}`,
+        bold: true,
+        color: '#1a1033'
+      }
+    ];
+    if (inv.addonsTotal > 0) {
+      rows.push({
+        title: 'Custom Voice Dedication Add-ons',
+        sub: 'Extra selected upgrades',
+        val: `+₹${inv.addonsTotal}`,
+        bold: false,
+        color: '#2c1e4a'
+      });
+    }
+    if (inv.discount > 0) {
+      rows.push({
+        title: `Promo / Referral Discount${inv.couponCode ? ` (${inv.couponCode})` : ''}`,
+        sub: 'Instant Store Offer Applied',
+        val: `-₹${inv.discount}`,
+        bold: true,
+        color: '#047857'
+      });
+    }
+    if (inv.walletUsed > 0) {
+      rows.push({
+        title: 'KothaVerse Wallet Credit',
+        sub: 'Redeemed from reader wallet',
+        val: `-₹${inv.walletUsed}`,
+        bold: true,
+        color: '#047857'
+      });
+    }
+
+    let rowY = tblY + 124;
+    rows.forEach((r, idx) => {
+      if (idx % 2 === 1) {
+        ctx.fillStyle = 'rgba(109, 40, 217, 0.045)';
+        ctx.fillRect(hX + 18, rowY - 38, hW - 36, 86);
+      }
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = r.color;
+      ctx.font = `${r.bold ? 'bold ' : ''}25px "Noto Sans Bengali", sans-serif`;
+      const wrapped = _kvWrapLines(ctx, r.title, hW - 280, 2);
+      wrapped.forEach((line, li) => {
+        ctx.fillText(line, hX + 34, rowY + li * 30);
+      });
+
+      const subOffset = wrapped.length > 1 ? 58 : 30;
+      ctx.fillStyle = '#736591';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(r.sub, hX + 34, rowY + subOffset);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = r.color;
+      ctx.font = 'bold 28px "Noto Sans Bengali", monospace';
+      ctx.fillText(r.val, hX + hW - 34, rowY + 8);
+
+      // Divider line
+      ctx.strokeStyle = 'rgba(200, 158, 58, 0.22)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(hX + 30, rowY + subOffset + 22);
+      ctx.lineTo(hX + hW - 30, rowY + subOffset + 22);
+      ctx.stroke();
+
+      rowY += subOffset + 58;
+    });
+
+    // =====================================================================
+    // 5. TOTAL PAID ROYAL PURPLE BAR + LUXURY PAID SEAL
+    // =====================================================================
+    const totY = tblY + tblH + 34;
+    const totH = 114;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(34, 16, 69, 0.22)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 10;
+    _kvRoundRect(ctx, hX, totY, hW, totH, 24);
+    const totGrad = ctx.createLinearGradient(hX, totY, hX + hW, totY + totH);
+    totGrad.addColorStop(0, '#180c30');
+    totGrad.addColorStop(0.6, '#331766');
+    totGrad.addColorStop(1, '#1e0e3d');
+    ctx.fillStyle = totGrad;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = goldStroke;
+    ctx.lineWidth = 3;
+    _kvRoundRect(ctx, hX, totY, hW, totH, 24);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#d8c5ff';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText('TOTAL AMOUNT SETTLED VIA UPI', hX + 36, totY + 42);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '22px "Noto Sans Bengali", sans-serif';
+    ctx.fillText('সর্বমোট পরিশোধিত মূল্য (সকল ছাড় সমন্বিত)', hX + 36, totY + 80);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#f6d87c';
+    ctx.font = 'bold 48px "Noto Sans Bengali", monospace';
+    ctx.fillText(`₹${inv.finalPaid}`, hX + hW - 36, totY + 74);
+
+    // Best-Level Luxury Paid Seal Stamp (Placed cleanly below Total Bar, right side)
+    _kvDrawLuxuryPaidSeal(ctx, hX + hW - 145, totY + totH + 135);
+
+    // Left Signature / Verification Note beside Seal
+    const noteY = totY + totH + 78;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#2f155c';
+    ctx.font = 'bold 24px "Noto Sans Bengali", sans-serif';
+    ctx.fillText('KothaVerse-এর পাশে থাকার জন্য আন্তরিক ধন্যবাদ!', hX + 12, noteY);
+
+    ctx.fillStyle = '#5b4e78';
+    ctx.font = '20px "Noto Sans Bengali", sans-serif';
+    ctx.fillText('এই রসিদটি ডিজিটালভাবে যাচাইকৃত এবং সম্পূর্ণ বৈধ।', hX + 12, noteY + 38);
+    ctx.fillText('অর্ডার সংক্রান্ত যেকোনো সহায়তার জন্য নিচের ঠিকানায় যোগাযোগ করুন।', hX + 12, noteY + 72);
+
+    // =====================================================================
+    // 6. BOTTOM GLASS FOOTER STRIP
+    // =====================================================================
+    const ftY = H - 152;
+    drawGlassCard(hX, ftY, hW, 74);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#2b1654';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(`Support: ${support}`, hX + 30, ftY + 45);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#9a711b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(window.location.origin.replace(/^https?:\/\//, ''), hX + hW - 30, ftY + 45);
+
+    const pngDataUrl = canvas.toDataURL('image/png', 1.0);
+
+    // Export as genuine A4 PDF via pdf-lib
+    if (window.PDFLib) {
+      const pdfDoc = await window.PDFLib.PDFDocument.create();
+      const pngBytes = await fetch(pngDataUrl).then((r) => r.arrayBuffer());
+      const pngImg = await pdfDoc.embedPng(pngBytes);
+      const page = pdfDoc.addPage([595.28, 841.89]);
+      page.drawImage(pngImg, {
+        x: 0,
+        y: 0,
+        width: 595.28,
+        height: 841.89
+      });
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `KothaVerse-Receipt-${inv.invoiceNo}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      showToast('প্রিমিয়াম Invoice PDF ডাউনলোড হয়েছে!', 'success');
+    } else {
+      const a = document.createElement('a');
+      a.href = pngDataUrl;
+      a.download = `KothaVerse-Receipt-${inv.invoiceNo}.png`;
+      a.click();
+    }
+  } catch (err) {
+    showToast('Invoice তৈরি ব্যর্থ: ' + err.message, 'error');
+  }
+}
+
+// -------------------------------------------------------------------------
+// 3. VERIFIED BUYER REVIEWS (5-STAR RATING BADGE + MODAL)
+// -------------------------------------------------------------------------
+function getReviewsForTarget(targetType, targetId) {
+  return (window.kvPhase3.reviews || []).filter(
+    (r) => r.target_type === targetType && String(r.target_id) === String(targetId)
+  );
+}
+
+function renderProductRatingBadge(targetType, targetId) {
+  if (state.storeSettings?.reviews_enabled === false) return '';
+  const list = getReviewsForTarget(targetType, targetId);
+  const count = list.length;
+  const avg = count ? (list.reduce((s, r) => s + Number(r.rating || 0), 0) / count).toFixed(1) : null;
+
+  return `
+    <button type="button" onclick="openProductReviewsModal('${targetType}', '${targetId}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-midnight/75 border border-antiqueGold/30 text-[11px] font-bengali hover:border-antiqueGold transition">
+      <span class="text-amber-400">★</span>
+      ${count
+        ? `<strong class="text-ivory font-mono">${avg}</strong><span class="text-ivory/65">(${count} ভেরিফায়েড রিভিউ)</span>`
+        : `<span class="text-ivory/65">রিভিউ দেখুন</span>`}
+    </button>
+  `;
+}
+
+function userOwnsReviewTarget(targetType, targetId) {
+  if (!state.user) return false;
+  if (targetType === 'ebook') {
+    return (state.myEbookOrders || []).some(
+      (o) => String(o.ebook_id) === String(targetId) && isOrderInvoiceReady(o, 'ebook')
+    );
+  }
+  if (targetType === 'voice') {
+    return (state.myVoiceOrders || []).some((o) => isOrderInvoiceReady(o, 'voice'));
+  }
+  if (targetType === 'bundle') {
+    return (window.kvPhase2?.myBundleOrders || []).some(
+      (o) => String(o.bundle_id) === String(targetId) && isOrderInvoiceReady(o, 'bundle')
+    );
+  }
+  return false;
+}
+
+function resolveReviewTargetTitle(targetType, targetId) {
+  if (targetType === 'voice') return 'কাস্টম ভয়েস ডেডিকেশন';
+  if (targetType === 'ebook') {
+    return (state.ebooks || []).find((b) => String(b.id) === String(targetId))?.title || 'ই-বুক';
+  }
+  if (targetType === 'bundle') {
+    return (window.kvPhase2?.bundles || []).find((b) => String(b.id) === String(targetId))?.title || 'কম্বো প্যাক';
+  }
+  return 'KothaVerse Store';
+}
+
+function openProductReviewsModal(targetType, targetId) {
+  const title = resolveReviewTargetTitle(targetType, targetId);
+  const list = getReviewsForTarget(targetType, targetId);
+  const canReview = userOwnsReviewTarget(targetType, targetId);
+  const myExisting = state.user ? list.find((r) => r.user_id === state.user.id) : null;
+
+  let modal = document.getElementById('kv-reviews-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-reviews-modal';
+    modal.className = 'fixed inset-0 z-[95] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  window._kvReviewRating = myExisting?.rating || 5;
+
+  modal.innerHTML = `
+    <div class="w-full max-w-xl max-h-[88vh] flex flex-col rounded-3xl bg-midnight border border-antiqueGold/40 overflow-hidden shadow-card font-bengali my-auto">
+      <div class="px-5 py-4 bg-deepPurple/45 border-b border-antiqueGold/20 flex items-center justify-between gap-3">
+        <div>
+          <span class="text-[10px] uppercase text-emerald-300 font-semibold">✓ Verified Buyer Reviews</span>
+          <h3 class="text-base sm:text-lg font-bold text-ivory">${escapeHtml(title)}</h3>
+        </div>
+        <button onclick="closeDynamicModal('kv-reviews-modal')" class="px-3 py-1 rounded-xl bg-midnight border border-ivory/20 text-xs text-ivory/80">✕</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-5 flex-1">
+        ${canReview ? `
+          <form onsubmit="handleSubmitVerifiedReview(event, '${targetType}', '${targetId}')" class="p-4 rounded-2xl bg-deepPurple/35 border border-antiqueGold/30 space-y-3 text-xs">
+            <div class="font-bold text-antiqueGold">${myExisting ? 'আপনার রিভিউ আপডেট করুন' : 'ভেরিফায়েড ক্রেতা হিসেবে আপনার রিভিউ দিন'}</div>
+            <div id="kv-star-picker" class="flex items-center gap-1.5 text-2xl">
+              ${[1, 2, 3, 4, 5].map((n) => `
+                <button type="button" onclick="setReviewStar(${n})" class="kv-star-btn transition ${n <= window._kvReviewRating ? 'text-amber-400' : 'text-ivory/25'}">★</button>
+              `).join('')}
+            </div>
+            <textarea id="kv-rev-text" rows="3" required placeholder="আপনার অভিজ্ঞতা সংক্ষেপে লিখুন..." class="w-full px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory">${escapeHtml(myExisting?.review_text || '')}</textarea>
+            <button type="submit" class="px-5 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold">রিভিউ প্রকাশ করুন</button>
+          </form>
+        ` : `
+          <div class="p-3 rounded-xl bg-midnight/70 border border-ivory/15 text-[11px] text-ivory/70">
+            শুধুমাত্র ভেরিফায়েড ক্রেতারাই (যাঁদের অর্ডার অ্যাপ্রুভ হয়েছে) এখানে ৫-স্টার রিভিউ দিতে পারবেন।
+          </div>
+        `}
+
+        <div class="space-y-3">
+          ${list.map((r) => `
+            <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/15 space-y-1.5 text-xs">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <strong class="text-ivory">${escapeHtml(r.reviewer_name)}</strong>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] bg-emerald-500/20 border border-emerald-400/40 text-emerald-300">✓ Verified Buyer</span>
+                </div>
+                <span class="text-amber-400 tracking-wider">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+              </div>
+              <p class="text-ivory/80 leading-relaxed whitespace-pre-line">${escapeHtml(r.review_text)}</p>
+              <div class="text-[10px] text-ivory/45">${new Date(r.created_at).toLocaleDateString('bn-IN')}</div>
+            </div>
+          `).join('') || '<p class="text-xs text-ivory/50 text-center py-6">এখনও কোনো রিভিউ নেই।</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function setReviewStar(n) {
+  window._kvReviewRating = n;
+  document.querySelectorAll('.kv-star-btn').forEach((btn, idx) => {
+    btn.classList.toggle('text-amber-400', idx < n);
+    btn.classList.toggle('text-ivory/25', idx >= n);
+  });
+}
+
+async function handleSubmitVerifiedReview(e, targetType, targetId) {
+  e.preventDefault();
+  if (!state.user) return openAuthModal('login');
+
+  const reviewText = (document.getElementById('kv-rev-text')?.value || '').trim();
+  const rating = Number(window._kvReviewRating || 5);
+  const title = resolveReviewTargetTitle(targetType, targetId);
+
+  const { error } = await sb.from('store_reviews').upsert({
+    user_id: state.user.id,
+    reviewer_name: state.profile?.full_name || 'KothaVerse পাঠক',
+    target_type: targetType,
+    target_id: String(targetId),
+    target_title: title,
+    rating,
+    review_text: reviewText,
+    is_visible: true
+  }, { onConflict: 'user_id,target_type,target_id' });
+
+  if (error) return showToast('রিভিউ জমা ব্যর্থ: ' + error.message, 'error');
+
+  showToast('ধন্যবাদ! আপনার ভেরিফায়েড রিভিউ যুক্ত হয়েছে।', 'success');
+  await loadPhase3PublicData();
+  openProductReviewsModal(targetType, targetId);
+  renderCurrentRoute();
+}
+
+// -------------------------------------------------------------------------
+// 4. ADMIN PHASE 3 CONTROL PANEL (Tracking, Invoice Branding & Reviews)
+// -------------------------------------------------------------------------
+async function loadAdminPhase3Panel(containerId = 'admin-phase3-controls') {
+  const box = document.getElementById(containerId);
+  if (!box || state.profile?.role !== 'admin') return;
+
+  const [ebOrdRes, vcOrdRes, bnOrdRes, revRes] = await Promise.all([
+    sb.from('ebook_orders').select('*, ebooks(title, price_inr)').order('created_at', { ascending: false }).limit(25),
+    sb.from('voice_dedication_orders').select('*').order('created_at', { ascending: false }).limit(25),
+    sb.from('bundle_orders').select('*, store_bundles(title, bundle_price_inr)').order('created_at', { ascending: false }).limit(25),
+    sb.from('store_reviews').select('*').order('created_at', { ascending: false })
+  ]);
+
+  window._adminPhase3Cache = {
+    ebookOrders: ebOrdRes.data || [],
+    voiceOrders: vcOrdRes.data || [],
+    bundleOrders: bnOrdRes.data || [],
+    reviews: revRes.data || []
+  };
+
+  const combinedOrders = [
+    ...window._adminPhase3Cache.ebookOrders.map((o) => ({ ...o, _type: 'ebook', _label: 'ই-বুক', _title: o.ebooks?.title || 'E-Book', _buyer: o.buyer_name, _wa: o.whatsapp_number })),
+    ...window._adminPhase3Cache.voiceOrders.map((o) => ({ ...o, _type: 'voice', _label: 'ভয়েস গিফট', _title: `${o.package_name} → ${o.receiver_name}`, _buyer: o.sender_name, _wa: o.whatsapp_number })),
+    ...window._adminPhase3Cache.bundleOrders.map((o) => ({ ...o, _type: 'bundle', _label: 'কম্বো প্যাক', _title: o.store_bundles?.title || 'Bundle', _buyer: o.buyer_name, _wa: o.whatsapp_number }))
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+
+  const cfg = state.storeSettings || {};
+
+  box.innerHTML = `
+    <div class="mt-8 pt-6 border-t border-antiqueGold/25 space-y-6 font-bengali">
+      <h2 class="text-xl font-bold text-antiqueGold flex items-center gap-2">
+        <i data-lucide="truck" class="w-5 h-5"></i> অর্ডার ট্র্যাকিং, ইনভয়েস ব্র্যান্ডিং ও রিভিউ কন্ট্রোল (Phase 3)
+      </h2>
+
+      <!-- A. LIVE ORDER TRACKING MANAGER -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <h3 class="font-bold text-sm text-amber-300">১. লাইভ অর্ডার ট্র্যাকিং আপডেট (সর্বশেষ ২০টি অর্ডার)</h3>
+        <div class="space-y-2.5">
+          ${combinedOrders.map((o) => {
+            const st = resolveOrderStage(o, o._type);
+            const uid = `${o._type}_${o.id}`;
+            return `
+              <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 space-y-2 text-xs">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span class="px-2 py-0.5 rounded bg-midnight text-antiqueGold text-[10px]">${o._label}</span>
+                    <strong class="ml-1.5 text-ivory">${escapeHtml(o._title)}</strong>
+                    <span class="ml-1.5 text-ivory/65">— ${escapeHtml(o._buyer || '')} (${escapeHtml(o._wa || '')})</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="downloadOrderInvoicePDF('${o._type}', '${o.id}')" class="px-2.5 py-1 rounded-lg bg-antiqueGold/20 border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight">Invoice PDF</button>
+                    ${o._wa ? `<button onclick="adminSendTrackingWA('${o._type}', '${o.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/25 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white">WA আপডেট</button>` : ''}
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                  <select id="trk-stage-${uid}" class="sm:col-span-4 px-2.5 py-1.5 rounded-lg bg-midnight border border-antiqueGold/25 text-ivory">
+                    <option value="submitted" ${st === 'submitted' ? 'selected' : ''}>১. পেমেন্ট জমা (Submitted)</option>
+                    <option value="verified" ${st === 'verified' ? 'selected' : ''}>২. পেমেন্ট যাচাই (Verified)</option>
+                    <option value="preparing" ${st === 'preparing' ? 'selected' : ''}>৩. প্রস্তুত / রেকর্ডিং (Preparing)</option>
+                    <option value="delivered" ${st === 'delivered' ? 'selected' : ''}>৪. ডেলিভারি সম্পন্ন (Delivered)</option>
+                    <option value="rejected" ${st === 'rejected' ? 'selected' : ''}>বাতিল (Rejected)</option>
+                  </select>
+                  <input id="trk-note-${uid}" type="text" value="${escapeHtml(o.tracking_note || '')}" placeholder="ক্রেতার জন্য সংক্ষিপ্ত নোট (যেমন: আজ রাত ৮টায় অডিও পাবেন)..." class="sm:col-span-6 px-2.5 py-1.5 rounded-lg bg-midnight border border-antiqueGold/25 text-ivory" />
+                  <button onclick="adminUpdateOrderTracking('${o._type}', '${o.id}')" class="sm:col-span-2 py-1.5 rounded-lg bg-antiqueGold text-midnight font-semibold hover:opacity-90">আপডেট</button>
+                </div>
+              </div>
+            `;
+          }).join('') || '<p class="text-xs text-ivory/50">কোনো অর্ডার পাওয়া যায়নি।</p>'}
+        </div>
+      </div>
+
+      <!-- B. INVOICE BRANDING & REVIEWS TOGGLE -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-bold text-sm text-amber-300">২. ইনভয়েস ব্র্যান্ডিং ও রিভিউ সেটিংস</h3>
+          <label class="flex items-center gap-2 text-xs cursor-pointer">
+            <input id="adm-rev-en" type="checkbox" ${cfg.reviews_enabled !== false ? 'checked' : ''} class="accent-amber-400" />
+            <span>স্টোরে ভেরিফায়েড রিভিউ চালু রাখুন</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+          <input id="adm-inv-tag" value="${escapeHtml(cfg.invoice_brand_tagline || 'শব্দের পরিপাটে, মনের আলাপন')}" placeholder="ইনভয়েস ট্যাগলাইন" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+          <input id="adm-inv-sup" value="${escapeHtml(cfg.invoice_support_contact || 'support@kothaverse.in')}" placeholder="ইনভয়েস সাপোর্ট কন্টাক্ট (Email / WhatsApp)" class="px-3 py-2 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory" />
+        </div>
+        <button onclick="adminSavePhase3Settings()" class="px-4 py-2 rounded-xl bg-antiqueGold text-midnight font-semibold text-xs">সেটিংস সেভ করুন</button>
+      </div>
+
+      <!-- C. VERIFIED BUYER REVIEWS MODERATION -->
+      <div class="p-4 rounded-2xl bg-midnight/65 border border-antiqueGold/25 space-y-2.5">
+        <h3 class="font-bold text-sm text-amber-300">৩. ভেরিফায়েড ক্রেতাদের রিভিউ মডারেশন (${window._adminPhase3Cache.reviews.length})</h3>
+        ${window._adminPhase3Cache.reviews.map((r) => `
+          <div class="p-3 rounded-xl bg-deepPurple/35 border border-antiqueGold/15 flex flex-wrap items-start justify-between gap-3 text-xs">
+            <div class="space-y-1 flex-1">
+              <div>
+                <strong class="text-ivory">${escapeHtml(r.reviewer_name)}</strong>
+                <span class="ml-2 text-amber-400">${'★'.repeat(r.rating)}</span>
+                <span class="ml-2 text-ivory/55">(${escapeHtml(r.target_title || r.target_type)})</span>
+              </div>
+              <p class="text-ivory/80">${escapeHtml(r.review_text)}</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button onclick="adminToggleReviewVisibility('${r.id}', ${!r.is_visible})" class="px-2.5 py-1 rounded-lg ${r.is_visible ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-400/40' : 'bg-ivory/10 text-ivory/60'}">
+                ${r.is_visible ? 'দৃশ্যমান' : 'লুকানো'}
+              </button>
+              <button onclick="adminDeleteStoreReview('${r.id}')" class="px-2.5 py-1 rounded-lg bg-red-600/25 text-red-200 hover:bg-red-600 hover:text-white">মুছুন</button>
+            </div>
+          </div>
+        `).join('') || '<p class="text-xs text-ivory/50">এখনও কোনো রিভিউ আসেনি।</p>'}
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+async function adminUpdateOrderTracking(orderType, orderId) {
+  const uid = `${orderType}_${orderId}`;
+  const stage = document.getElementById(`trk-stage-${uid}`)?.value || 'submitted';
+  const note = (document.getElementById(`trk-note-${uid}`)?.value || '').trim();
+
+  const tableMap = { ebook: 'ebook_orders', voice: 'voice_dedication_orders', bundle: 'bundle_orders' };
+  const tableName = tableMap[orderType];
+  if (!tableName) return;
+
+  const updateData = { tracking_stage: stage, tracking_note: note };
+  if (stage === 'rejected') updateData.status = 'rejected';
+  else if (['verified', 'preparing', 'delivered'].includes(stage)) updateData.status = 'approved';
+
+  const { error } = await sb.from(tableName).update(updateData).eq('id', orderId);
+  if (error) return showToast('ট্র্যাকিং আপডেট ব্যর্থ: ' + error.message, 'error');
+
+  showToast('অর্ডার ট্র্যাকিং স্ট্যাটাস আপডেট হয়েছে!', 'success');
+  loadAdminPhase3Panel();
+}
+
+function adminSendTrackingWA(orderType, orderId) {
+  const cache = window._adminPhase3Cache || {};
+  const list = orderType === 'ebook' ? cache.ebookOrders : orderType === 'voice' ? cache.voiceOrders : cache.bundleOrders;
+  const o = (list || []).find((x) => x.id === orderId);
+  if (!o) return;
+
+  const wa = typeof formatIndianWA === 'function' ? formatIndianWA(o.whatsapp_number) : '';
+  if (!wa) return showToast('WhatsApp নম্বর পাওয়া যায়নি।', 'error');
+
+  const stageNames = {
+    submitted: 'পেমেন্ট জমা হয়েছে (যাচাই চলছে)',
+    verified: 'পেমেন্ট যাচাই সম্পন্ন হয়েছে ✓',
+    preparing: orderType === 'voice' ? 'আপনার কাস্টম ভয়েস রেকর্ডিং চলছে 🎙️' : 'আপনার অর্ডার প্রস্তুত হচ্ছে',
+    delivered: 'আপনার অর্ডার ডেলিভারি ও আনলক সম্পন্ন হয়েছে! 🎉',
+    rejected: 'দুঃখিত, অর্ডারটি বাতিল করা হয়েছে'
+  };
+
+  const st = resolveOrderStage(o, orderType);
+  const name = o.buyer_name || o.sender_name || 'পাঠক';
+  const msg = `নমস্কার ${name},\n\nKothaVerse-এ আপনার অর্ডারের সর্বশেষ আপডেট:\n*স্ট্যাটাস:* ${stageNames[st] || st}${o.tracking_note ? `\n*বার্তা:* ${o.tracking_note}` : ''}\n\nলাইভ ট্র্যাকিং ও Invoice PDF ডাউনলোড করতে ভিজিট করুন: ${window.location.origin}/#store\n\nশুভেচ্ছান্তে,\nটিম KothaVerse`;
+
+  window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+async function adminSavePhase3Settings() {
+  const payload = {
+    reviews_enabled: document.getElementById('adm-rev-en')?.checked ?? true,
+    invoice_brand_tagline: (document.getElementById('adm-inv-tag')?.value || '').trim(),
+    invoice_support_contact: (document.getElementById('adm-inv-sup')?.value || '').trim()
+  };
+
+  const { error } = await sb.from('store_settings').update(payload).eq('id', 1);
+  if (error) return showToast('সেভ ব্যর্থ: ' + error.message, 'error');
+
+  state.storeSettings = { ...(state.storeSettings || {}), ...payload };
+  showToast('ইনভয়েস ও রিভিউ সেটিংস সেভ হয়েছে!', 'success');
+}
+
+async function adminToggleReviewVisibility(id, nextState) {
+  const { error } = await sb.from('store_reviews').update({ is_visible: nextState }).eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  await loadPhase3PublicData();
+  loadAdminPhase3Panel();
+}
+
+async function adminDeleteStoreReview(id) {
+  const { error } = await sb.from('store_reviews').delete().eq('id', id);
+  if (error) return showToast(error.message, 'error');
+  showToast('রিভিউ মুছে ফেলা হয়েছে।', 'success');
+  await loadPhase3PublicData();
+  loadAdminPhase3Panel();
 }
 
     async function initApp() {
