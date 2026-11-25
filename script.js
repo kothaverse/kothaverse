@@ -7279,10 +7279,9 @@ window.addEventListener('popstate', () => {
   }
 });
 
-function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVerse Order', onSuccess, onCancel }) {
+async function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVerse Order', onSuccess, onCancel }) {
   const finalAmount = Math.max(0, Math.round(Number(amount || 0)));
 
-  // Jodi coupon/wallet diye 100% discount (₹0) hoy -> direct confirm
   if (finalAmount <= 0) {
     if (typeof onSuccess === 'function') {
       onSuccess('FREE-' + Date.now().toString().slice(-6));
@@ -7290,12 +7289,26 @@ function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVe
     return;
   }
 
-  const cfg = state.storeSettings || {};
-  const upiId = cfg.upi_id || 'kothaverse@upi';
-  const upiName = cfg.upi_name || 'KothaVerse';
-  const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${finalAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
+  // Sob somoy DB theke latest UPI ID, Banking Name ar QR fetch kore neya
+  if (typeof loadStoreSettingsFromDB === 'function') {
+    await loadStoreSettingsFromDB();
+  }
 
-  // Admin DB theke load kora QR thakle seta, nahole exact-amount auto QR
+  const cfg = state.storeSettings || {};
+  const upiId = String(cfg.upi_id || '').replace(/\s+/g, '');
+  const upiName = String(cfg.upi_name || 'KothaVerse').trim();
+
+  if (!upiId || upiId === 'kothaverse@upi') {
+    showToast('Admin Panel theke sothik UPI ID save kora nei!', 'error');
+    return;
+  }
+
+  // UPI App (GPay/PhonePe/Paytm) jate Banking Name thik fetch kore tar jonno ASCII-only pn & tn
+  const safePn = upiName.replace(/[^a-zA-Z0-9 ._-]/g, '').trim() || 'KothaVerse';
+  const safeTn = String(note || 'KothaVerse Order').replace(/[^a-zA-Z0-9 ._-]/g, '').trim().slice(0, 35) || 'KothaVerse Order';
+
+  const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(safePn)}&am=${finalAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(safeTn)}`;
+
   const autoQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(upiDeepLink)}`;
   const primaryQrUrl = cfg.qr_image_url || autoQrUrl;
 
@@ -7309,7 +7322,6 @@ function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVe
 
   _kvPaySession = { onSuccess, onCancel, amount: finalAmount, submitted: false };
 
-  // Browser history-te state push (jate Back chaplei purchase cancel hoy)
   try {
     history.pushState({ kvUpiGateway: true }, '', window.location.href);
     _kvPayPushedHistory = true;
@@ -7336,11 +7348,14 @@ function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVe
 
       <!-- Gateway Body -->
       <div id="kv-gw-body" class="p-5 space-y-4">
-        <!-- QR Code Box -->
+        <!-- QR Code & Banking Name Box -->
         <div class="p-4 rounded-2xl bg-deepPurple/35 border border-antiqueGold/25 flex flex-col items-center text-center space-y-2.5">
           <img id="kv-gw-qr-img" src="${escapeHtml(primaryQrUrl)}" alt="KothaVerse UPI QR" class="w-44 h-44 rounded-2xl bg-white p-2 object-contain border-2 border-antiqueGold/50 shadow-gold" />
           <div class="text-xs text-ivory/90">
             যেকোনো UPI অ্যাপ দিয়ে স্ক্যান করে ঠিক <strong class="text-antiqueGold font-mono">₹${finalAmount}</strong> পেমেন্ট করুন
+          </div>
+          <div class="text-xs text-emerald-300 font-semibold">
+            Banking Name: ${escapeHtml(upiName)}
           </div>
           <div class="flex flex-wrap items-center justify-center gap-2 text-[11px]">
             <span class="px-2.5 py-1 rounded-lg bg-midnight border border-antiqueGold/25 font-mono text-ivory/90">${escapeHtml(upiId)}</span>
@@ -7374,10 +7389,8 @@ function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'KothaVe
   modal.classList.add('flex');
   if (window.lucide) lucide.createIcons();
 
-  // 5-minute countdown timer
   startUpiGatewayTimer(300);
 }
-
 function startUpiGatewayTimer(seconds) {
   if (_kvPayTimerId) clearInterval(_kvPayTimerId);
   let remaining = seconds;
