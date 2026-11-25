@@ -3097,8 +3097,8 @@ async function refreshAdminBadges() {
                   <div id="reject-box-${s.id}" class="hidden mt-3 p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 space-y-2.5 font-bengali text-xs">
                     <div class="font-semibold text-red-200">বাতিলের কারণ নির্বাচন করুন বা লিখুন:</div>
                     <select id="rej-preset-${s.id}" class="w-full px-3 py-2 rounded-lg bg-midnight border border-red-400/30 text-ivory">
-                      <option value="লেখাটিতে কপি/প্লেজারিজম (${plagScore ?? 'উচ্চ'}%) ধরা পড়েছে এবং সাহিত্যমান (${qualScore ?? 'কম'}/100) প্রকাশযোগ্য মানের নয়। অনুগ্রহ করে মৌলিক ও পরিমার্জিত লেখা জমা দিন।" ${failBoth ? 'selected' : ''}>প্লেজারিজম + কোয়ালিটি দুটোই কম</option>
-                      <option value="লেখাটিতে কপি বা প্লেজারিজম ধরা পড়েছে (${plagScore ?? 'উচ্চ'}%)। শুধুমাত্র আপনার নিজের মৌলিক লেখা জমা দিন।" ${failPlagOnly ? 'selected' : ''}>কপি / প্লেজারিজম ধরা পড়েছে</option>
+                      <option value="লেখাটিতে কপি/Plagiarism (${plagScore ?? 'উচ্চ'}%) ধরা পড়েছে এবং সাহিত্যমান (${qualScore ?? 'কম'}/100) প্রকাশযোগ্য মানের নয়। অনুগ্রহ করে মৌলিক ও পরিমার্জিত লেখা জমা দিন।" ${failBoth ? 'selected' : ''}>Plagiarism + কোয়ালিটি দুটোই কম</option>
+                      <option value="লেখাটিতে কপি বা Plagiarism ধরা পড়েছে (${plagScore ?? 'উচ্চ'}%)। শুধুমাত্র আপনার নিজের মৌলিক লেখা জমা দিন।" ${failPlagOnly ? 'selected' : ''}>কপি / Plagiarism ধরা পড়েছে</option>
                       <option value="লেখাটির সাহিত্যমান, ছন্দ বা বানান প্রকাশযোগ্য মানের নয় (Quality Score: ${qualScore ?? 'কম'}/100)। আরেকটু পরিমার্জনা করে পুনরায় জমা দিন।" ${failQualOnly ? 'selected' : ''}>কোয়ালিটি / বানান / ছন্দ মানসম্মত নয়</option>
                       <option value="লেখাটি অসম্পূর্ণ বা খুব সংক্ষিপ্ত। সম্পূর্ণ লেখা জমা দিন।">লেখাটি অসম্পূর্ণ / খুব ছোট</option>
                       <option value="লেখাটি KothaVerse-এর কমিউনিটি নীতিমালা বহির্ভূত।">নীতিমালা বহির্ভূত বিষয়বস্তু</option>
