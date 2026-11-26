@@ -564,6 +564,70 @@ html.light .special-popup-card .rounded-full span.w-1\.5 {
 
   <!-- ==================== MAIN SPA CONTENT ROOT ==================== -->
   <main id="app-root" class="flex-1 pt-16 pb-32 min-h-screen"></main>
+  <!-- ==================== GLOBAL FOOTER ==================== -->
+  <footer class="bg-midnight/90 border-t border-antiqueGold/20 font-bengali pt-10 pb-28 sm:pb-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+        <!-- Brand & Tagline -->
+        <div class="space-y-3">
+          <button onclick="navigate('home')" class="flex items-center gap-2.5 text-left group focus:outline-none">
+            <div class="w-9 h-9 rounded-xl overflow-hidden shadow-gold border border-antiqueGold/40 bg-midnight shrink-0">
+              <img
+                src="20261121_192551.png"
+                alt="KothaVerse Logo"
+                class="w-full h-full object-cover"
+                onerror="this.src='https://placehold.co/72x72/352343/C5A46D?text=KV'"
+              />
+            </div>
+            <div>
+              <span class="font-display text-lg font-semibold tracking-wide gold-gradient-text block leading-tight">KothaVerse</span>
+              <span class="text-[11px] text-ivory/60 block">শব্দের পরিপাটে, মনের আলাপন</span>
+            </div>
+          </button>
+          <p class="text-xs text-ivory/65 leading-relaxed max-w-sm">
+            বাংলা কবিতা, হৃদয়স্পর্শী আবৃত্তি, রাতের অডিও গল্প, ই-বুক সংকলন এবং প্রিয়জনের জন্য কাস্টম ভয়েস গিফটের নান্দনিক সাহিত্য ভুবন।
+          </p>
+        </div>
+
+        <!-- Quick Navigation -->
+        <div class="space-y-2.5">
+          <h4 class="text-xs uppercase tracking-widest text-antiqueGold font-display font-semibold">দ্রুত নেভিগেশন</h4>
+          <div class="grid grid-cols-2 gap-2 text-xs text-ivory/75">
+            <button onclick="navigate('home')" class="text-left hover:text-antiqueGold transition">হোম</button>
+            <button onclick="navigate('poetry')" class="text-left hover:text-antiqueGold transition">কবিতার সংগ্রহ</button>
+            <button onclick="navigate('audio-stories')" class="text-left hover:text-antiqueGold transition">অডিও গল্প</button>
+            <button onclick="navigate('recitations')" class="text-left hover:text-antiqueGold transition">আবৃত্তি</button>
+            <button onclick="navigate('store')" class="text-left hover:text-antiqueGold transition">স্টোর ও গিফট</button>
+            <button onclick="navigate('community')" class="text-left hover:text-antiqueGold transition">কমিউনিটি</button>
+            <button onclick="navigate('about')" class="text-left hover:text-antiqueGold transition">পরিচিতি</button>
+            <button onclick="navigate('contact')" class="text-left hover:text-antiqueGold transition">যোগাযোগ</button>
+          </div>
+        </div>
+
+        <!-- Legal & Policies -->
+        <div class="space-y-3">
+          <h4 class="text-xs uppercase tracking-widest text-antiqueGold font-display font-semibold">নীতিমালা ও নিরাপত্তা</h4>
+          <div class="flex flex-col items-start gap-2 text-xs text-ivory/80">
+            <button type="button" onclick="openKvStorePolicyModal('privacy')" class="inline-flex items-center gap-1.5 hover:text-antiqueGold underline underline-offset-4 transition">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-antiqueGold"></i> Privacy Policy (গোপনীয়তা নীতি)
+            </button>
+            <button type="button" onclick="openKvStorePolicyModal('refund')" class="inline-flex items-center gap-1.5 hover:text-antiqueGold underline underline-offset-4 transition">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-antiqueGold"></i> Refund Policy (রিফান্ড ও বাতিলকরণ নীতি)
+            </button>
+          </div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-deepPurple/45 border border-antiqueGold/20 text-[11px] text-emerald-300">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> নিরাপদ UPI পেমেন্ট ও ভেরিফায়েড ডিজিটাল ডেলিভারি
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Copyright Bar -->
+      <div class="pt-5 border-t border-antiqueGold/15 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-ivory/55">
+        <div>© 2026 KothaVerse (কথা Verse) • সর্বস্বত্ব সংরক্ষিত</div>
+        <div>শব্দের পরিপাটে, মনের আলাপন</div>
+      </div>
+    </div>
+  </footer>
  
 
   <!-- ==================== PERSISTENT GLOBAL AUDIO PLAYER ==================== -->
