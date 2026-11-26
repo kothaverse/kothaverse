@@ -7462,6 +7462,12 @@ async function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'K
             <label class="block text-[11px] text-ivory/80 mb-1">পেমেন্ট সম্পন্ন হলে ১২ সংখ্যার UPI Transaction ID / UTR দিন:</label>
             <input id="kv-gw-utr" required minlength="8" autocomplete="off" placeholder="যেমন: 432198765432" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/35 text-sm text-ivory font-mono focus:border-antiqueGold outline-none" />
           </div>
+          <div class="text-[11px] text-ivory/65 leading-relaxed bg-midnight/60 px-3 py-2 rounded-xl border border-antiqueGold/15">
+            পেমেন্ট নিশ্চিত করার মাধ্যমে আপনি আমাদের
+            <button type="button" onclick="openKvStorePolicyModal('privacy')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Privacy Policy</button>
+            এবং
+            <button type="button" onclick="openKvStorePolicyModal('refund')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Refund Policy</button>-তে সম্মতি দিচ্ছেন।
+          </div>
           <div class="flex gap-2.5 pt-1">
             <button type="button" onclick="closeUpiGatewayPopup(false, 'আপনি পেমেন্ট বাতিল করেছেন।')" class="px-4 py-3 rounded-xl bg-red-600/20 border border-red-400/35 text-red-200 hover:bg-red-600 hover:text-white text-xs font-semibold transition">
               বাতিল করুন
@@ -7469,12 +7475,7 @@ async function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'K
             <button id="kv-gw-submit-btn" type="submit" class="flex-1 py-3 rounded-xl bg-antiqueGold text-midnight font-bold text-xs shadow-gold hover:opacity-95 transition">
               পেমেন্ট সম্পন্ন — নিশ্চিত করুন
             </button>
-            <div class="text-[11px] text-ivory/65 leading-relaxed bg-midnight/60 px-3 py-2 rounded-xl border border-antiqueGold/15">
-            পেমেন্ট নিশ্চিত করার মাধ্যমে আপনি আমাদের
-            <button type="button" onclick="openKvStorePolicyModal('privacy')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Privacy Policy</button>
-            এবং
-            <button type="button" onclick="openKvStorePolicyModal('refund')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Refund Policy</button>-তে সম্মতি দিচ্ছেন।
-          </div>
+            
           </div>
         </form>
       </div>
