@@ -2541,6 +2541,15 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
               </div>
               <h3 class="text-lg sm:text-xl font-bold text-ivory">লাইভ অর্ডার ট্র্যাকিং, অফিসিয়াল PDF ইনভয়েস ও ভেরিফায়েড রিভিউ</h3>
               <p class="text-xs text-ivory/70">প্রতিটি স্টোর অর্ডারে থাকছে সরাসরি UPI পেমেন্ট, রিয়েল-টাইম স্ট্যাটাস আপডেট এবং ব্র্যান্ডেড ডিজিটাল রসিদ।</p>
+              <div class="flex flex-wrap items-center gap-3 pt-1.5 text-xs">
+                <button type="button" onclick="openKvStorePolicyModal('privacy')" class="inline-flex items-center gap-1 text-antiqueGold hover:text-amber-300 underline underline-offset-4 font-semibold transition">
+                  <i data-lucide="lock" class="w-3.5 h-3.5"></i> Privacy Policy
+                </button>
+                <span class="text-ivory/30">•</span>
+                <button type="button" onclick="openKvStorePolicyModal('refund')" class="inline-flex items-center gap-1 text-antiqueGold hover:text-amber-300 underline underline-offset-4 font-semibold transition">
+                  <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund &amp; Cancellation Policy
+                </button>
+              </div>
             </div>
 
             <div class="flex flex-wrap gap-2.5 shrink-0 text-xs">
@@ -7460,6 +7469,12 @@ async function openUpiGatewayPopup({ title, subtitle = '', amount = 0, note = 'K
             <button id="kv-gw-submit-btn" type="submit" class="flex-1 py-3 rounded-xl bg-antiqueGold text-midnight font-bold text-xs shadow-gold hover:opacity-95 transition">
               পেমেন্ট সম্পন্ন — নিশ্চিত করুন
             </button>
+            <div class="text-[11px] text-ivory/65 leading-relaxed bg-midnight/60 px-3 py-2 rounded-xl border border-antiqueGold/15">
+            পেমেন্ট নিশ্চিত করার মাধ্যমে আপনি আমাদের
+            <button type="button" onclick="openKvStorePolicyModal('privacy')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Privacy Policy</button>
+            এবং
+            <button type="button" onclick="openKvStorePolicyModal('refund')" class="text-antiqueGold underline hover:text-amber-300 font-semibold">Refund Policy</button>-তে সম্মতি দিচ্ছেন।
+          </div>
           </div>
         </form>
       </div>
@@ -8821,6 +8836,92 @@ async function adminDeleteStoreReview(id) {
   showToast('রিভিউ মুছে ফেলা হয়েছে।', 'success');
   await loadPhase3PublicData();
   loadAdminPhase3Panel();
+}
+// =========================================================================
+// PAYMENT POPUP: PRIVACY & REFUND POLICY MODAL (STACKED OVER UPI GATEWAY)
+// =========================================================================
+function openKvStorePolicyModal(activeTab = 'refund') {
+  let modal = document.getElementById('kv-policy-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-policy-modal';
+    modal.className = 'fixed inset-0 z-[120] bg-black/85 backdrop-blur-md hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  const isRefund = activeTab === 'refund';
+
+  modal.innerHTML = `
+    <div class="w-full max-w-lg max-h-[85vh] flex flex-col rounded-3xl bg-midnight border border-antiqueGold/45 shadow-card overflow-hidden font-bengali my-auto fade-in">
+      <!-- Header -->
+      <div class="px-5 py-4 bg-deepPurple/50 border-b border-antiqueGold/25 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="shield-check" class="w-4 h-4 text-antiqueGold"></i>
+          <h3 class="text-sm sm:text-base font-bold text-ivory">KothaVerse নীতিমালা</h3>
+        </div>
+        <button type="button" onclick="closeKvStorePolicyModal()" class="px-3 py-1 rounded-xl bg-midnight border border-ivory/20 text-xs text-ivory/80 hover:border-antiqueGold">✕</button>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="px-5 pt-3 flex gap-2 border-b border-antiqueGold/15 pb-3 text-xs">
+        <button type="button" onclick="openKvStorePolicyModal('refund')" class="px-3.5 py-1.5 rounded-xl border transition ${isRefund ? 'bg-antiqueGold text-midnight border-antiqueGold font-bold' : 'bg-midnight/70 border-antiqueGold/25 text-ivory/75'}">
+          রিফান্ড ও বাতিলকরণ নীতি
+        </button>
+        <button type="button" onclick="openKvStorePolicyModal('privacy')" class="px-3.5 py-1.5 rounded-xl border transition ${!isRefund ? 'bg-antiqueGold text-midnight border-antiqueGold font-bold' : 'bg-midnight/70 border-antiqueGold/25 text-ivory/75'}">
+          গোপনীয়তা নীতি (Privacy)
+        </button>
+      </div>
+
+      <!-- Policy Content -->
+      <div class="p-5 overflow-y-auto space-y-3 text-xs text-ivory/85 leading-relaxed flex-1">
+        ${isRefund ? `
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">১. ডিজিটাল ই-বুক, কম্বো প্যাক ও গিফট কোড</h4>
+            <p>ডিজিটাল প্রোডাক্ট একবার আনলক বা ডেলিভারি হয়ে গেলে তা ফেরতযোগ্য (Non-Refundable) নয়। তবে পেমেন্ট যাচাই হওয়ার ২৪ ঘণ্টার মধ্যে অ্যাক্সেস না পেলে বা ফাইল ত্রুটিপূর্ণ হলে সম্পূর্ণ রিফান্ড বা বিকল্প কপি দেওয়া হবে।</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">২. কাস্টম ভয়েস ডেডিকেশন</h4>
+            <p>ভয়েস রেকর্ডিং শুরু হওয়ার আগে অর্ডার বাতিল করলে ১০০% টাকা ফেরত পাবেন। রেকর্ডিং সম্পন্ন হয়ে গেলে অর্ডার বাতিল বা রিফান্ড প্রযোজ্য নয়।</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">৩. ডাবল পেমেন্ট বা ভুল UTR সংক্রান্ত রিফান্ড</h4>
+            <p>একই অর্ডারে দুবার টাকা কেটে গেলে বা ভুলবশত অতিরিক্ত পেমেন্ট হলে সঠিক UTR ও স্ক্রিনশটসহ সাপোর্টে যোগাযোগ করলে যাচাই সাপেক্ষে ৩-৫ কার্যদিবসের মধ্যে মূল UPI অ্যাকাউন্টে টাকা ফেরত পাঠানো হবে।</p>
+          </div>
+        ` : `
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">১. সংগৃহীত তথ্যের ব্যবহার</h4>
+            <p>অর্ডার যাচাই, পাঠকের নামে ওয়াটারমার্কযুক্ত PDF তৈরি এবং WhatsApp বা ইমেইলে ডেলিভারি আপডেট পাঠানোর জন্য কেবল আপনার নাম, যোগাযোগের নম্বর এবং ১২ সংখ্যার UPI UTR সংরক্ষণ করা হয়।</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">২. ব্যাংকিং ও পেমেন্ট নিরাপত্তা</h4>
+            <p>KothaVerse কখনোই আপনার UPI PIN, ব্যাংক পাসওয়ার্ড বা কার্ডের গোপন তথ্য চায় না কিংবা সংরক্ষণ করে না। সমস্ত লেনদেন সরাসরি আপনার নিজস্ব UPI অ্যাপের মাধ্যমে সম্পন্ন হয়।</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+            <h4 class="font-bold text-antiqueGold text-sm">৩. তথ্যের গোপনীয়তা</h4>
+            <p>আপনার ব্যক্তিগত তথ্য, মোবাইল নম্বর বা অর্ডারের বিবরণ কোনো তৃতীয় পক্ষ বা বিজ্ঞাপন সংস্থার কাছে বিক্রি বা শেয়ার করা হয় না।</p>
+          </div>
+        `}
+      </div>
+
+      <!-- Footer Button -->
+      <div class="px-5 py-3.5 bg-midnight border-t border-antiqueGold/20 flex justify-end">
+        <button type="button" onclick="closeKvStorePolicyModal()" class="px-5 py-2 rounded-xl bg-antiqueGold text-midnight font-bold text-xs shadow-gold">
+          ${document.getElementById('kv-upi-gateway-modal') && !document.getElementById('kv-upi-gateway-modal').classList.contains('hidden') ? 'বুঝেছি, পেমেন্টে ফিরে যান' : 'বুঝেছি, বন্ধ করুন'}
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeKvStorePolicyModal() {
+  const modal = document.getElementById('kv-policy-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
 }
 
     async function initApp() {
