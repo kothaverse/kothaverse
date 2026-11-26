@@ -2449,29 +2449,110 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
     function renderAboutPage() {
       const cfg = getSiteSettings();
       return `
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-12 fade-in">
-          <div class="glass-panel rounded-3xl p-8 sm:p-12 border border-antiqueGold/30 space-y-6">
-            <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">About ${escapeHtml(cfg.siteName)}</span>
-            <h1 class="font-bengali text-3xl sm:text-4xl font-bold">${escapeHtml(cfg.tagline)}</h1>
-            <p class="font-bengali text-base text-ivory/80 leading-loose">
-              <strong>KothaVerse (কথা Verse)</strong> হলো বাংলা কবিতা, আবৃত্তি এবং অডিও গল্পপ্রেমীদের জন্য নির্মিত একটি আধুনিক, নীরব ও নান্দনিক ডিজিটাল সাহিত্য ভুবন। আমাদের লক্ষ্য হলো ব্যস্ত আধুনিক জীবনের মাঝে একটুখানি শান্ত অবসর তৈরি করা—যেখানে পাঠক Distraction-Free মোডে কবিতা পড়তে পারবেন এবং রাতের নীরবতায় Sleep & Ambient Mode চালু করে অডিও গল্প শুনতে পারবেন।
-            </p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 font-bengali">
-              <div class="p-4 rounded-2xl bg-midnight/60 border border-antiqueGold/20">
-                <i data-lucide="feather" class="w-6 h-6 text-antiqueGold mb-2"></i>
-                <h3 class="font-semibold mb-1">কবিতা ও সাহিত্য</h3>
-                <p class="text-xs text-ivory/65">১২টি সমৃদ্ধ বিভাগে নির্বাচিত বাংলা কবিতা ও PDF ডাউনলোড সুবিধা।</p>
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-12 fade-in font-bengali space-y-8">
+          <!-- Hero Brand Story Card -->
+          <div class="glass-panel rounded-3xl p-8 sm:p-12 border border-antiqueGold/35 shadow-card relative overflow-hidden space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-antiqueGold/15 border border-antiqueGold/35 text-xs uppercase tracking-widest text-antiqueGold font-display">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> About ${escapeHtml(cfg.siteName)}
               </div>
-              <div class="p-4 rounded-2xl bg-midnight/60 border border-antiqueGold/20">
-                <i data-lucide="headphones" class="w-6 h-6 text-antiqueGold mb-2"></i>
-                <h3 class="font-semibold mb-1">অডিও গল্প ও আবৃত্তি</h3>
-                <p class="text-xs text-ivory/65">সিনেমাটিক আবহে অডিও স্টোরি, প্লে-কিউ এবং Sleep Ambience।</p>
+              <span class="text-xs text-ivory/60 italic">“কিছু কথা... শুধু শোনা যায় না... অনুভব করতে হয়”</span>
+            </div>
+
+            <div class="space-y-3">
+              <h1 class="text-3xl sm:text-5xl font-bold gold-gradient-text leading-tight">${escapeHtml(cfg.tagline)}</h1>
+              <p class="text-sm sm:text-base text-ivory/80 leading-loose">
+                <strong>KothaVerse (কথা Verse)</strong> হলো বাংলা কবিতা, আবৃত্তি, অডিও গল্প এবং আধুনিক ডিজিটাল প্রকাশনার একটি নান্দনিক ও নীরব সাহিত্য ভুবন। ব্যস্ত যান্ত্রিক জীবনের মাঝে একটুখানি শান্ত অবসর তৈরি করাই আমাদের লক্ষ্য—যেখানে পাঠক Distraction-Free মোডে কবিতা পড়তে পারবেন, রাতের নীরবতায় Sleep &amp; Ambient Mode চালু করে অডিও গল্প শুনতে পারবেন এবং প্রিয়জনের জন্য বিশেষ ই-বুক বা কাস্টম ভয়েস গিফট পাঠাতে পারবেন।
+              </p>
+            </div>
+
+            <!-- Live Platform Highlights -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
+                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.poems || []).length}+</div>
+                <div class="text-[11px] text-ivory/70 mt-0.5">নির্বাচিত কবিতা</div>
               </div>
-              <div class="p-4 rounded-2xl bg-midnight/60 border border-antiqueGold/20">
-                <i data-lucide="users" class="w-6 h-6 text-antiqueGold mb-2"></i>
-                <h3 class="font-semibold mb-1">Write With KothaVerse</h3>
-                <p class="text-xs text-ivory/65">নবীন ও প্রবীণ কবিদের লেখা প্রকাশের উন্মুক্ত মঞ্চ।</p>
+              <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
+                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.audioStories || []).length}+</div>
+                <div class="text-[11px] text-ivory/70 mt-0.5">অডিও গল্প ও আবৃত্তি</div>
               </div>
+              <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
+                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.ebooks || []).length}+</div>
+                <div class="text-[11px] text-ivory/70 mt-0.5">প্রিমিয়াম ই-বুক</div>
+              </div>
+              <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
+                <div class="text-xl sm:text-2xl font-mono font-bold text-emerald-300">১০০%</div>
+                <div class="text-[11px] text-ivory/70 mt-0.5">মৌলিক বাংলা সাহিত্য</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6 Core Pillars Grid -->
+          <div class="glass-panel rounded-3xl p-7 sm:p-10 border border-antiqueGold/25 space-y-6">
+            <div>
+              <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">What We Offer</span>
+              <h2 class="text-2xl sm:text-3xl font-bold text-ivory mt-1">কথা Verse-এ যা যা পাচ্ছেন</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="feather" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">কবিতা ও সাহিত্য</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">১২টি সমৃদ্ধ বিভাগে নির্বাচিত বাংলা কবিতা, Distraction-Free রিডিং মোড এবং শেয়ারযোগ্য Quote Card তৈরির সুবিধা।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="headphones" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">অডিও গল্প ও আবৃত্তি</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">সিনেমাটিক আবহে অডিও স্টোরি, নন-স্টপ ব্যাকগ্রাউন্ড প্লেয়ার এবং রাতের শান্তির জন্য Sleep &amp; Ambient সাউন্ড।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="book-open" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">ই-বুক সংকলন ও কম্বো</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">ফ্রি স্যাম্পল প্রিভিউ পড়ে বেছে নিন প্রিয় বই—কেনার পর পাঠকের নামে ওয়াটারমার্কসহ PDF রিডার ও ডাউনলোড সুবিধা।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="mic" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">কাস্টম ভয়েস গিফট</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">জন্মদিন, বার্ষিকী বা বিশেষ দিনে আমাদের কণ্ঠশিল্পীদের কণ্ঠে প্রিয়জনের নাম নিয়ে আবৃত্তি, ব্যাকগ্রাউন্ড মিউজিক ও রিল গিফট।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="gift" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">গিফট কোড ও ওয়ালেট</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">ইউনিক গিফট কোডের মাধ্যমে প্রিয়জনকে ই-বুক উপহার দিন এবং বন্ধুদের রেফার করে জিতে নিন KothaVerse ওয়ালেট ক্রেডিট।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="users" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">Write With KothaVerse</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">নবীন ও প্রবীণ লেখকদের জন্য উন্মুক্ত মঞ্চ—প্রতিটি লেখা মৌলিকতা ও মান যাচাইয়ের মাধ্যমে সম্মানের সাথে প্রকাশিত হয়।</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trust Bar + Quick Action CTA -->
+          <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30 bg-gradient-to-r from-deepPurple/55 via-midnight/85 to-deepPurple/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+            <div class="space-y-1.5">
+              <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
+                <i data-lucide="shield-check" class="w-4 h-4"></i> স্বচ্ছ ও নিরাপদ অভিজ্ঞতা
+              </div>
+              <h3 class="text-lg sm:text-xl font-bold text-ivory">লাইভ অর্ডার ট্র্যাকিং, অফিসিয়াল PDF ইনভয়েস ও ভেরিফায়েড রিভিউ</h3>
+              <p class="text-xs text-ivory/70">প্রতিটি স্টোর অর্ডারে থাকছে সরাসরি UPI পেমেন্ট, রিয়েল-টাইম স্ট্যাটাস আপডেট এবং ব্র্যান্ডেড ডিজিটাল রসিদ।</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2.5 shrink-0 text-xs">
+              <button onclick="navigate('poetry')" class="px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold hover:opacity-90 transition">
+                কবিতা পড়ুন
+              </button>
+              <button onclick="navigate('store')" class="px-5 py-2.5 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold transition">
+                স্টোর দেখুন
+              </button>
+              <button onclick="navigate('submit')" class="px-4 py-2.5 rounded-xl bg-midnight/80 border border-ivory/20 text-ivory hover:border-antiqueGold transition">
+                লেখা পাঠান
+              </button>
             </div>
           </div>
         </div>
