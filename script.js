@@ -5326,38 +5326,19 @@ async function openWatermarkedEbook(ebookId, mode = 'view') {
     }
 
     const watermarkedBytes = await pdfDoc.save();
-    const blob = new Blob([watermarkedBytes], { type: 'application/pdf' });
-    if (activePdfBlobUrl) URL.revokeObjectURL(activePdfBlobUrl);
-    activePdfBlobUrl = URL.createObjectURL(blob);
+    const wmLabel = `${order.buyer_name} • ${order.buyer_email || state.user?.email || ''} • ${order.whatsapp_number || ''}`;
 
-    const safeFileName = `${book.title.replace(/[^\w\u0980-\u09FF-]+/g, '_')}_KothaVerse.pdf`;
-
-    if (mode === 'download') {
-      const a = document.createElement('a');
-      a.href = activePdfBlobUrl;
-      a.download = safeFileName;
-      a.click();
-      showToast('ওয়াটারমার্কসহ PDF ডাউনলোড শুরু হয়েছে!', 'success');
-    } else {
-      document.getElementById('pdf-reader-title').textContent = book.title;
-      document.getElementById('pdf-reader-wm-info').textContent = `Licensed to: ${order.buyer_name} • ${order.buyer_email || state.user.email} • ${order.whatsapp_number}`;
-      const dlBtn = document.getElementById('pdf-reader-download-btn');
-      dlBtn.href = activePdfBlobUrl;
-      dlBtn.download = safeFileName;
-      document.getElementById('pdf-reader-frame').src = activePdfBlobUrl;
-      openModal('pdf-reader-modal');
-    }
+    // Download bondho — direct protected view-only canvas reader khulbe
+    await openProtectedPdfReader({
+      title: book.title,
+      pdfSource: watermarkedBytes,
+      watermarkText: wmLabel
+    });
   } catch (err) {
     console.error('Watermarked PDF error:', err);
-    showToast('PDF তৈরিতে ত্রুটি: ' + err.message, 'error');
+    showToast('PDF লোডে ত্রুটি: ' + err.message, 'error');
   }
 }
-
-function closePdfReaderModal() {
-  closeModal('pdf-reader-modal');
-  document.getElementById('pdf-reader-frame').src = 'about:blank';
-}
-
 // =========================================================================
 // ADMIN CONTROL ROOM: E-BOOK UPLOAD & ORDER MANAGER
 // =========================================================================
@@ -8923,6 +8904,187 @@ function closeKvStorePolicyModal() {
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+}
+// =========================================================================
+// PROTECTED VIEW-ONLY PDF READER (NO DOWNLOAD + ANTI-CAPTURE DETERRENTS)
+// =========================================================================
+let _kvPdfGuardActive = false;
+
+function _kvShowPrivacyCurtain() {
+  if (!_kvPdfGuardActive) return;
+  const curtain = document.getElementById('pdf-privacy-curtain');
+  const container = document.getElementById('pdf-canvas-container');
+  if (container) container.style.filter = 'blur(22px)';
+  if (curtain) {
+    curtain.classList.remove('hidden');
+    curtain.classList.add('flex');
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function resumeProtectedPdfView() {
+  const curtain = document.getElementById('pdf-privacy-curtain');
+  const container = document.getElementById('pdf-canvas-container');
+  if (container) container.style.filter = 'none';
+  if (curtain) {
+    curtain.classList.add('hidden');
+    curtain.classList.remove('flex');
+  }
+}
+
+function _kvPdfKeyGuard(e) {
+  if (!_kvPdfGuardActive) return;
+  const key = (e.key || '').toLowerCase();
+
+  // PrintScreen detect korle screen blackout + clipboard clear chesta
+  if (e.key === 'PrintScreen' || e.keyCode === 44) {
+    e.preventDefault();
+    _kvShowPrivacyCurtain();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText('KothaVerse Protected Content').catch(() => {});
+    }
+    showToast('এই ই-বুকের স্ক্রিনশট নেওয়া নিষিদ্ধ।', 'error');
+    return;
+  }
+
+  // Ctrl+S (Save), Ctrl+P (Print), Ctrl+C (Copy), Ctrl+U (Source), F12 / DevTools block
+  if (
+    (e.ctrlKey || e.metaKey) && ['s', 'p', 'c', 'u'].includes(key) ||
+    ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c', 's'].includes(key)) ||
+    e.key === 'F12'
+  ) {
+    e.preventDefault();
+    if (key === 's' || key === 'p') {
+      showToast('ডাউনলোড ও প্রিন্ট সুবিধা বন্ধ রাখা হয়েছে।', 'error');
+    } else {
+      _kvShowPrivacyCurtain();
+    }
+  }
+}
+
+function _kvPdfContextGuard(e) {
+  if (_kvPdfGuardActive) e.preventDefault();
+}
+
+function _kvPdfVisibilityGuard() {
+  if (_kvPdfGuardActive && document.hidden) _kvShowPrivacyCurtain();
+}
+
+function _kvPdfBlurGuard() {
+  if (_kvPdfGuardActive) _kvShowPrivacyCurtain();
+}
+
+function enablePdfCaptureGuard() {
+  _kvPdfGuardActive = true;
+  window.addEventListener('keydown', _kvPdfKeyGuard, true);
+  window.addEventListener('keyup', _kvPdfKeyGuard, true);
+  document.addEventListener('contextmenu', _kvPdfContextGuard, true);
+  document.addEventListener('visibilitychange', _kvPdfVisibilityGuard);
+  window.addEventListener('blur', _kvPdfBlurGuard);
+}
+
+function disablePdfCaptureGuard() {
+  _kvPdfGuardActive = false;
+  window.removeEventListener('keydown', _kvPdfKeyGuard, true);
+  window.removeEventListener('keyup', _kvPdfKeyGuard, true);
+  document.removeEventListener('contextmenu', _kvPdfContextGuard, true);
+  document.removeEventListener('visibilitychange', _kvPdfVisibilityGuard);
+  window.removeEventListener('blur', _kvPdfBlurGuard);
+  resumeProtectedPdfView();
+}
+
+async function openProtectedPdfReader({ title = 'ই-বুক রিডার', pdfSource, watermarkText = 'KothaVerse Protected' }) {
+  const modal = document.getElementById('pdf-reader-modal');
+  const titleEl = document.getElementById('pdf-reader-title');
+  const wmInfoEl = document.getElementById('pdf-reader-wm-info');
+  const container = document.getElementById('pdf-canvas-container');
+  const counterEl = document.getElementById('pdf-page-counter');
+
+  if (!modal || !container) return;
+
+  if (!window.pdfjsLib) {
+    showToast('PDF রিডার লোড হয়নি, পেজ রিলোড করে চেষ্টা করুন।', 'error');
+    return;
+  }
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  titleEl.textContent = title;
+  wmInfoEl.textContent = `লাইসেন্সপ্রাপ্ত পাঠক: ${watermarkText} • শুধুমাত্র পড়ার জন্য`;
+  counterEl.textContent = 'লোড হচ্ছে...';
+  container.innerHTML = `<div class="py-16 text-xs text-ivory/70 font-bengali">সুরক্ষিত বইয়ের পাতা প্রস্তুত হচ্ছে...</div>`;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  enablePdfCaptureGuard();
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    // pdfSource URL (string) ba Uint8Array duitoi support korbe
+    const loadingTask = typeof pdfSource === 'string'
+      ? pdfjsLib.getDocument({ url: pdfSource, disableAutoFetch: false })
+      : pdfjsLib.getDocument({ data: pdfSource });
+
+    const pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages;
+    counterEl.textContent = `মোট ${totalPages} পাতা`;
+    container.innerHTML = '';
+
+    const maxDisplayWidth = Math.min(container.clientWidth || 720, 760);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const baseViewport = page.getViewport({ scale: 1 });
+      const fitScale = maxDisplayWidth / baseViewport.width;
+      const viewport = page.getViewport({ scale: fitScale * dpr });
+
+      const pageWrap = document.createElement('div');
+      pageWrap.className = 'relative w-full rounded-xl overflow-hidden shadow-card border border-antiqueGold/20 bg-white';
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.style.width = '100%';
+      canvas.style.height = 'auto';
+      canvas.style.display = 'block';
+      canvas.oncontextmenu = (e) => e.preventDefault();
+      canvas.ondragstart = (e) => e.preventDefault();
+
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      // Proti page-er canvas-e diagonal dynamic watermark draw kora
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(-Math.PI / 5);
+      ctx.font = `600 ${Math.max(16, Math.round(canvas.width * 0.026))}px sans-serif`;
+      ctx.fillStyle = 'rgba(53, 35, 67, 0.14)';
+      ctx.textAlign = 'center';
+      ctx.fillText(watermarkText, 0, -canvas.height * 0.18);
+      ctx.fillText(`KothaVerse • ${watermarkText}`, 0, 0);
+      ctx.fillText(`Page ${pageNum} • Do Not Share`, 0, canvas.height * 0.18);
+      ctx.restore();
+
+      pageWrap.appendChild(canvas);
+      container.appendChild(pageWrap);
+    }
+  } catch (err) {
+    console.error('Protected PDF render error:', err);
+    container.innerHTML = `<div class="py-12 text-center text-xs text-red-300 font-bengali">বইটি লোড করা যায়নি। ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।</div>`;
+  }
+}
+
+function closePdfReaderModal() {
+  disablePdfCaptureGuard();
+  const modal = document.getElementById('pdf-reader-modal');
+  const container = document.getElementById('pdf-canvas-container');
+  if (container) container.innerHTML = '';
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
 }
 
     async function initApp() {
