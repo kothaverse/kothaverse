@@ -10213,10 +10213,12 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
       await document.fonts.ready;
     }
 
-    // A4 proportions at 2.5x retina scale for crisp print quality (595.28 x 841.89 pt)
-    const scale = 2.5;
-    const W = Math.round(595.28 * scale); // 1488 px
-    const H = Math.round(841.89 * scale); // 2105 px
+    // A4 page dimensions (595.28 x 841.89 pt) rendered at 3x DPI for crisp small text
+    const PAGE_W = 595.28;
+    const PAGE_H = 841.89;
+    const scale = 3;
+    const W = Math.round(PAGE_W * scale);
+    const H = Math.round(PAGE_H * scale);
 
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -10224,7 +10226,13 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
     const ctx = canvas.getContext('2d');
 
     const s = (v) => v * scale;
-    const fmtINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtINR = (n) =>
+      `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // Unified horizontal grid coordinates (every block aligns to these exact edges)
+    const M = s(36);
+    const CW = W - M * 2;
+    const RIGHT = W - M;
 
     const drawRoundRect = (x, y, w, h, r, fill, stroke, lineW = 1) => {
       ctx.beginPath();
@@ -10263,65 +10271,72 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
       return lines.length ? lines : [''];
     };
 
-    // 1. Creamy Ivory Paper Background & Double Antique Gold Frame
+    // 1. Creamy Ivory Background & Double Antique Gold Frame
     ctx.fillStyle = '#FBF8F3';
     ctx.fillRect(0, 0, W, H);
 
     ctx.strokeStyle = '#C5A46D';
-    ctx.lineWidth = s(2);
-    ctx.strokeRect(s(22), s(22), W - s(44), H - s(44));
+    ctx.lineWidth = s(1.6);
+    ctx.strokeRect(s(20), s(20), W - s(40), H - s(40));
 
     ctx.strokeStyle = 'rgba(197, 164, 109, 0.45)';
-    ctx.lineWidth = s(0.8);
-    ctx.strokeRect(s(27), s(27), W - s(54), H - s(54));
+    ctx.lineWidth = s(0.6);
+    ctx.strokeRect(s(25), s(25), W - s(50), H - s(50));
 
-    // Subtle Diagonal Brand Watermark
+    // Faint Diagonal Brand Watermark
     ctx.save();
-    ctx.translate(W / 2, H * 0.54);
+    ctx.translate(W / 2, H * 0.52);
     ctx.rotate(-Math.PI / 6);
-    ctx.font = `700 ${s(54)}px "Playfair Display", serif`;
-    ctx.fillStyle = 'rgba(197, 164, 109, 0.08)';
+    ctx.font = `700 ${s(44)}px "Playfair Display", serif`;
+    ctx.fillStyle = 'rgba(197, 164, 109, 0.065)';
     ctx.textAlign = 'center';
     ctx.fillText('KOTHAVERSE OFFICIAL', 0, 0);
     ctx.restore();
 
-    // 2. Midnight Navy Header Banner
-    const headerH = s(126);
-    drawRoundRect(s(36), s(36), W - s(72), headerH, s(12), '#17121F', '#C5A46D', s(1.5));
+    // 2. Midnight Navy Header Banner (Top: 36, Height: 104 -> Bottom: 140)
+    const hdrY = s(36);
+    const hdrH = s(104);
+    drawRoundRect(M, hdrY, CW, hdrH, s(10), '#17121F', '#C5A46D', s(1.2));
 
-    // Gold Accent Strip inside Header
+    // Gold Accent Strip at Bottom of Header
     ctx.fillStyle = '#C5A46D';
-    ctx.fillRect(s(36), s(36) + headerH - s(5), W - s(72), s(5));
+    ctx.fillRect(M, hdrY + hdrH - s(4), CW, s(4));
 
-    // Left: KV Monogram Emblem + Brand Name
-    drawRoundRect(s(54), s(56), s(54), s(54), s(12), '#352343', '#C5A46D', s(1.5));
+    // Left: KV Monogram Emblem + Brand Identity
+    const logoX = M + s(14);
+    const logoY = hdrY + s(24);
+    const logoSize = s(48);
+    drawRoundRect(logoX, logoY, logoSize, logoSize, s(10), '#352343', '#C5A46D', s(1.2));
+
     ctx.fillStyle = '#C5A46D';
-    ctx.font = `700 ${s(22)}px "Playfair Display", serif`;
+    ctx.font = `700 ${s(18)}px "Playfair Display", serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('KV', s(81), s(91));
+    ctx.fillText('KV', logoX + logoSize / 2, logoY + s(30));
 
+    const brandTextX = logoX + logoSize + s(12);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#F1E9DF';
-    ctx.font = `700 ${s(25)}px "Playfair Display", serif`;
-    ctx.fillText('KothaVerse', s(122), s(81));
+    ctx.font = `700 ${s(19)}px "Playfair Display", serif`;
+    ctx.fillText('KothaVerse', brandTextX, hdrY + s(40));
 
     ctx.fillStyle = '#C5A46D';
-    ctx.font = `500 ${s(11)}px "Noto Serif Bengali", sans-serif`;
-    ctx.fillText('কথা Verse • শব্দের পরিপাটে, মনের আলাপন', s(122), s(101));
+    ctx.font = `500 ${s(9)}px "Noto Serif Bengali", sans-serif`;
+    ctx.fillText('কথা Verse • শব্দের পরিপাটে, মনের আলাপন', brandTextX, hdrY + s(56));
 
     ctx.fillStyle = 'rgba(241, 233, 223, 0.72)';
-    ctx.font = `400 ${s(9.5)}px "Inter", sans-serif`;
-    ctx.fillText('Web: aamaderkothaverse.vercel.app   |   Hardcopy & Literary Store', s(122), s(119));
+    ctx.font = `400 ${s(7.8)}px "Inter", sans-serif`;
+    ctx.fillText('aamaderkothaverse.vercel.app  •  Hardcopy Books & Literary Store', brandTextX, hdrY + s(71));
 
-    // Right: INVOICE Title & Metadata
+    // Right: Invoice Title, Number, Date & Status Pill
+    const hdrRightX = RIGHT - s(14);
     ctx.textAlign = 'right';
     ctx.fillStyle = '#C5A46D';
-    ctx.font = `700 ${s(20)}px "Playfair Display", serif`;
-    ctx.fillText('RETAIL INVOICE', W - s(54), s(76));
+    ctx.font = `700 ${s(14.5)}px "Playfair Display", serif`;
+    ctx.fillText('RETAIL INVOICE', hdrRightX, hdrY + s(28));
 
     ctx.fillStyle = '#F1E9DF';
-    ctx.font = `600 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText(`Invoice No: INV-${ord.order_code}`, W - s(54), s(97));
+    ctx.font = `600 ${s(8.5)}px "Inter", sans-serif`;
+    ctx.fillText(`Invoice No: INV-${ord.order_code}`, hdrRightX, hdrY + s(44));
 
     const orderDate = new Date(ord.created_at).toLocaleDateString('en-IN', {
       day: '2-digit',
@@ -10329,10 +10344,9 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
       year: 'numeric'
     });
     ctx.fillStyle = 'rgba(241, 233, 223, 0.78)';
-    ctx.font = `400 ${s(10)}px "Inter", sans-serif`;
-    ctx.fillText(`Order Date: ${orderDate}`, W - s(54), s(114));
+    ctx.font = `400 ${s(8)}px "Inter", sans-serif`;
+    ctx.fillText(`Order Date: ${orderDate}`, hdrRightX, hdrY + s(57));
 
-    // Payment Status Badge
     const payStatusMap = {
       verified: { label: 'PAID • UPI VERIFIED', bg: '#15803D', fg: '#FFFFFF' },
       cod_paid: { label: 'PAID • CASH ON DELIVERY', bg: '#15803D', fg: '#FFFFFF' },
@@ -10346,57 +10360,76 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
       fg: '#F1E9DF'
     };
 
-    const badgeW = s(156);
-    const badgeH = s(20);
-    drawRoundRect(W - s(54) - badgeW, s(123), badgeW, badgeH, s(6), badge.bg, null);
+    const pillW = s(134);
+    const pillH = s(17);
+    const pillY = hdrY + s(66);
+    drawRoundRect(hdrRightX - pillW, pillY, pillW, pillH, s(5), badge.bg, null);
     ctx.fillStyle = badge.fg;
-    ctx.font = `700 ${s(8.5)}px "Inter", sans-serif`;
+    ctx.font = `700 ${s(7)}px "Inter", sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(badge.label, W - s(54) - badgeW / 2, s(136.5));
+    ctx.fillText(badge.label, hdrRightX - pillW / 2, pillY + s(11));
 
-    // 3. Two-Column Customer & Dispatch Details
-    const topCardsY = s(178);
-    const colGap = s(16);
-    const colW = (W - s(72) - colGap) / 2;
-    const cardH = s(142);
+    // 3. Two-Column Customer & Dispatch Details (Top: 152, Height: 120 -> Bottom: 272)
+    const cardsY = hdrY + hdrH + s(12);
+    const colGap = s(14);
+    const colW = (CW - colGap) / 2;
+    const cardH = s(120);
 
     // Left Card: Billed & Shipped To
-    drawRoundRect(s(36), topCardsY, colW, cardH, s(10), '#FFFFFF', 'rgba(197, 164, 109, 0.45)', s(1));
+    drawRoundRect(M, cardsY, colW, cardH, s(8), '#FFFFFF', 'rgba(197, 164, 109, 0.45)', s(0.9));
     ctx.textAlign = 'left';
     ctx.fillStyle = '#8F6B2D';
-    ctx.font = `700 ${s(9.5)}px "Inter", sans-serif`;
-    ctx.fillText('BILLED & SHIPPED TO', s(50), topCardsY + s(20));
+    ctx.font = `700 ${s(7.6)}px "Inter", sans-serif`;
+    ctx.fillText('BILLED & SHIPPED TO', M + s(12), cardsY + s(16));
+
+    ctx.strokeStyle = 'rgba(197, 164, 109, 0.3)';
+    ctx.lineWidth = s(0.6);
+    ctx.beginPath();
+    ctx.moveTo(M + s(12), cardsY + s(22));
+    ctx.lineTo(M + colW - s(12), cardsY + s(22));
+    ctx.stroke();
 
     ctx.fillStyle = '#17121F';
-    ctx.font = `700 ${s(13)}px "Noto Serif Bengali", "Inter", sans-serif`;
-    ctx.fillText(String(ord.buyer_name || 'Valued Reader'), s(50), topCardsY + s(40));
+    ctx.font = `700 ${s(10.5)}px "Noto Serif Bengali", "Inter", sans-serif`;
+    ctx.fillText(String(ord.buyer_name || 'Valued Reader'), M + s(12), cardsY + s(37));
 
     ctx.fillStyle = '#352343';
-    ctx.font = `600 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText(`Phone: +91 ${ord.phone || ''}`, s(50), topCardsY + s(57));
+    ctx.font = `600 ${s(8.5)}px "Inter", sans-serif`;
+    ctx.fillText(`Phone: +91 ${ord.phone || ''}`, M + s(12), cardsY + s(51));
 
     const fullAddr = [
       ord.address_line,
       `${ord.city || ''}, ${ord.state || ''} - ${ord.pincode || ''}`,
       ord.landmark ? `Landmark: ${ord.landmark}` : ''
-    ].filter(Boolean).join(', ');
+    ]
+      .filter(Boolean)
+      .join(', ');
 
-    const addrLines = wrapLines(fullAddr, colW - s(28), `400 ${s(10)}px "Noto Serif Bengali", "Inter", sans-serif`);
+    const addrLines = wrapLines(
+      fullAddr,
+      colW - s(24),
+      `400 ${s(8.2)}px "Noto Serif Bengali", "Inter", sans-serif`
+    );
     ctx.fillStyle = '#374151';
     addrLines.slice(0, 4).forEach((ln, idx) => {
-      ctx.fillText(ln, s(50), topCardsY + s(75) + idx * s(14.5));
+      ctx.fillText(ln, M + s(12), cardsY + s(65) + idx * s(12.2));
     });
 
-    // Right Card: Order & Dispatch Metadata
-    const rightX = s(36) + colW + colGap;
-    drawRoundRect(rightX, topCardsY, colW, cardH, s(10), '#FFFFFF', 'rgba(197, 164, 109, 0.45)', s(1));
+    // Right Card: Order & Dispatch Details
+    const rightColX = M + colW + colGap;
+    drawRoundRect(rightColX, cardsY, colW, cardH, s(8), '#FFFFFF', 'rgba(197, 164, 109, 0.45)', s(0.9));
     ctx.fillStyle = '#8F6B2D';
-    ctx.font = `700 ${s(9.5)}px "Inter", sans-serif`;
-    ctx.fillText('ORDER & DISPATCH SUMMARY', rightX + s(14), topCardsY + s(20));
+    ctx.font = `700 ${s(7.6)}px "Inter", sans-serif`;
+    ctx.fillText('ORDER & DISPATCH DETAILS', rightColX + s(12), cardsY + s(16));
+
+    ctx.beginPath();
+    ctx.moveTo(rightColX + s(12), cardsY + s(22));
+    ctx.lineTo(rightColX + colW - s(12), cardsY + s(22));
+    ctx.stroke();
 
     const metaRows = [
-      ['Order ID:', `#${ord.order_code}`],
-      ['Payment Mode:', ord.payment_method === 'COD' ? 'Cash on Delivery (COD)' : 'UPI Prepaid'],
+      ['Order Code:', `#${ord.order_code}`],
+      ['Payment Method:', ord.payment_method === 'COD' ? 'Cash on Delivery (COD)' : 'UPI Prepaid'],
       ['UTR / Ref ID:', ord.transaction_id || (ord.payment_method === 'COD' ? 'Payable on Delivery' : 'N/A')],
       ['Delivery Status:', String(ord.delivery_status || 'placed').replace(/_/g, ' ').toUpperCase()],
       ['Courier Partner:', ord.courier_name || 'Assigning Soon'],
@@ -10404,76 +10437,82 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
     ];
 
     metaRows.forEach(([k, v], i) => {
-      const rowY = topCardsY + s(39) + i * s(16.5);
+      const rowY = cardsY + s(35) + i * s(13.6);
       ctx.fillStyle = '#6B7280';
-      ctx.font = `500 ${s(9.8)}px "Inter", sans-serif`;
+      ctx.font = `500 ${s(8)}px "Inter", sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText(k, rightX + s(14), rowY);
+      ctx.fillText(k, rightColX + s(12), rowY);
 
       ctx.fillStyle = '#17121F';
-      ctx.font = `600 ${s(9.8)}px "Inter", sans-serif`;
+      ctx.font = `600 ${s(8)}px "Inter", sans-serif`;
       ctx.textAlign = 'right';
-      ctx.fillText(String(v).slice(0, 30), rightX + colW - s(14), rowY);
+      ctx.fillText(String(v).slice(0, 32), rightColX + colW - s(12), rowY);
     });
 
     // 4. Itemized Product Table
-    let tableY = topCardsY + cardH + s(22);
-    const tableX = s(36);
-    const tableW = W - s(72);
-    const thH = s(32);
+    let tableY = cardsY + cardH + s(14);
+    const thH = s(24);
 
-    drawRoundRect(tableX, tableY, tableW, thH, s(8), '#17121F', null);
+    drawRoundRect(M, tableY, CW, thH, s(6), '#17121F', null);
     ctx.fillStyle = '#C5A46D';
-    ctx.font = `700 ${s(10)}px "Inter", sans-serif`;
+    ctx.font = `700 ${s(7.8)}px "Inter", sans-serif`;
 
-    const cIdx = tableX + s(14);
-    const cDesc = tableX + s(44);
-    const cUnit = tableX + tableW - s(175);
-    const cQty = tableX + tableW - s(95);
-    const cAmt = tableX + tableW - s(14);
+    const cIdx = M + s(12);
+    const cDesc = M + s(36);
+    const cUnit = RIGHT - s(142);
+    const cQty = RIGHT - s(82);
+    const cAmt = RIGHT - s(12);
 
     ctx.textAlign = 'left';
-    ctx.fillText('#', cIdx, tableY + s(20));
-    ctx.fillText('PRODUCT / HARDCOPY BOOK DESCRIPTION', cDesc, tableY + s(20));
+    ctx.fillText('#', cIdx, tableY + s(15));
+    ctx.fillText('PRODUCT / HARDCOPY BOOK DESCRIPTION', cDesc, tableY + s(15));
     ctx.textAlign = 'right';
-    ctx.fillText('UNIT PRICE', cUnit, tableY + s(20));
-    ctx.fillText('QTY', cQty, tableY + s(20));
-    ctx.fillText('AMOUNT', cAmt, tableY + s(20));
+    ctx.fillText('UNIT PRICE', cUnit, tableY + s(15));
+    ctx.fillText('QTY', cQty, tableY + s(15));
+    ctx.fillText('AMOUNT', cAmt, tableY + s(15));
 
-    tableY += thH + s(6);
+    tableY += thH + s(4);
 
-    const itemsList = Array.isArray(ord.items) && ord.items.length > 0
-      ? ord.items
-      : [{
-          title: ord.product_title,
-          quantity: ord.quantity,
-          unit_price: ord.unit_price,
-          line_total: Number(ord.unit_price || 0) * Number(ord.quantity || 1)
-        }];
+    const itemsList =
+      Array.isArray(ord.items) && ord.items.length > 0
+        ? ord.items
+        : [
+            {
+              title: ord.product_title,
+              quantity: ord.quantity,
+              unit_price: ord.unit_price,
+              line_total: Number(ord.unit_price || 0) * Number(ord.quantity || 1)
+            }
+          ];
 
     itemsList.forEach((item, idx) => {
-      const titleLines = wrapLines(item.title || 'KothaVerse Item', s(265), `600 ${s(10.8)}px "Noto Serif Bengali", "Inter", sans-serif`);
-      const rowH = Math.max(s(34), titleLines.length * s(15) + s(16));
+      const titleLines = wrapLines(
+        item.title || 'KothaVerse Item',
+        s(280),
+        `600 ${s(8.6)}px "Noto Serif Bengali", "Inter", sans-serif`
+      );
+      const rowH = Math.max(s(26), titleLines.length * s(12) + s(14));
 
       drawRoundRect(
-        tableX,
+        M,
         tableY,
-        tableW,
+        CW,
         rowH,
-        s(6),
-        idx % 2 === 0 ? '#FFFFFF' : '#F5EFE6',
+        s(5),
+        idx % 2 === 0 ? '#FFFFFF' : '#F6F1E9',
         'rgba(197, 164, 109, 0.25)',
-        s(0.7)
+        s(0.6)
       );
 
       ctx.fillStyle = '#6B7280';
-      ctx.font = `600 ${s(10)}px "Inter", sans-serif`;
+      ctx.font = `600 ${s(8)}px "Inter", sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText(String(idx + 1).padStart(2, '0'), cIdx, tableY + s(21));
+      ctx.fillText(String(idx + 1).padStart(2, '0'), cIdx, tableY + s(16.5));
 
       ctx.fillStyle = '#17121F';
+      ctx.font = `600 ${s(8.6)}px "Noto Serif Bengali", "Inter", sans-serif`;
       titleLines.forEach((ln, li) => {
-        ctx.fillText(ln, cDesc, tableY + s(20) + li * s(14.5));
+        ctx.fillText(ln, cDesc, tableY + s(16) + li * s(12));
       });
 
       const uPrice = Number(item.unit_price || 0);
@@ -10482,110 +10521,230 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
 
       ctx.textAlign = 'right';
       ctx.fillStyle = '#374151';
-      ctx.font = `500 ${s(10.5)}px "Inter", sans-serif`;
-      ctx.fillText(fmtINR(uPrice), cUnit, tableY + s(21));
-      ctx.fillText(String(qty), cQty, tableY + s(21));
+      ctx.font = `500 ${s(8.4)}px "Inter", sans-serif`;
+      ctx.fillText(fmtINR(uPrice), cUnit, tableY + s(16.5));
+      ctx.fillText(String(qty), cQty, tableY + s(16.5));
 
       ctx.fillStyle = '#17121F';
-      ctx.font = `700 ${s(10.8)}px "Inter", sans-serif`;
-      ctx.fillText(fmtINR(lineTot), cAmt, tableY + s(21));
+      ctx.font = `700 ${s(8.6)}px "Inter", sans-serif`;
+      ctx.fillText(fmtINR(lineTot), cAmt, tableY + s(16.5));
 
-      tableY += rowH + s(5);
+      tableY += rowH + s(3.5);
     });
 
-    // 5. Totals Summary Box (Right Aligned)
-    const sumY = Math.max(tableY + s(12), s(530));
-    const sumW = s(245);
-    const sumX = W - s(36) - sumW;
+    // 5. Three-Zone Bottom Summary: [Notes Box] + [Official Payment Stamp] + [Totals Box]
+    const bottomY = Math.max(tableY + s(14), s(535));
+    const boxH = s(98);
 
+    // 5A. Left: Terms & Policy Notes Box
+    const noteW = s(212);
+    drawRoundRect(M, bottomY, noteW, boxH, s(8), '#F5EFE6', 'rgba(197, 164, 109, 0.38)', s(0.8));
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#352343';
+    ctx.font = `700 ${s(7.8)}px "Inter", sans-serif`;
+    ctx.fillText('TERMS & CUSTOMER SUPPORT', M + s(11), bottomY + s(17));
+
+    ctx.fillStyle = '#4B5563';
+    ctx.font = `400 ${s(7.3)}px "Inter", sans-serif`;
+    ctx.fillText('• Covered under KothaVerse Return Policy.', M + s(11), bottomY + s(32));
+    ctx.fillText('• Record unboxing video for transit claims.', M + s(11), bottomY + s(45));
+    ctx.fillText('• Track parcel live in My Orders section.', M + s(11), bottomY + s(58));
+    ctx.fillText('• Web: aamaderkothaverse.vercel.app', M + s(11), bottomY + s(71));
+
+    ctx.fillStyle = '#8F6B2D';
+    ctx.font = `600 ${s(7.8)}px "Noto Serif Bengali", sans-serif`;
+    ctx.fillText('কথা Verse-এর সাথে থাকার জন্য আন্তরিক ধন্যবাদ।', M + s(11), bottomY + s(87));
+
+    // 5C. Right: Totals Summary Box (drawn before stamp so stamp sits cleanly beside/over edge)
+    const sumW = s(198);
+    const sumX = RIGHT - sumW;
     const shipCharge = Number(ord.delivery_charge || 0);
     const grandTotal = Number(ord.total_amount || 0);
     const subTotal = Math.max(0, grandTotal - shipCharge);
 
-    drawRoundRect(sumX, sumY, sumW, s(112), s(10), '#FFFFFF', '#C5A46D', s(1));
+    drawRoundRect(sumX, bottomY, sumW, boxH, s(8), '#FFFFFF', '#C5A46D', s(0.9));
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#4B5563';
-    ctx.font = `500 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText('Items Subtotal:', sumX + s(14), sumY + s(24));
+    ctx.font = `500 ${s(8.2)}px "Inter", sans-serif`;
+    ctx.fillText('Items Subtotal:', sumX + s(12), bottomY + s(20));
     ctx.textAlign = 'right';
     ctx.fillStyle = '#17121F';
-    ctx.font = `600 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText(fmtINR(subTotal), sumX + sumW - s(14), sumY + s(24));
+    ctx.font = `600 ${s(8.4)}px "Inter", sans-serif`;
+    ctx.fillText(fmtINR(subTotal), sumX + sumW - s(12), bottomY + s(20));
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#4B5563';
-    ctx.font = `500 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText('Parcel Delivery Charge:', sumX + s(14), sumY + s(46));
+    ctx.font = `500 ${s(8.2)}px "Inter", sans-serif`;
+    ctx.fillText('Parcel Delivery Charge:', sumX + s(12), bottomY + s(37));
     ctx.textAlign = 'right';
     ctx.fillStyle = shipCharge === 0 ? '#15803D' : '#17121F';
-    ctx.font = `700 ${s(10.5)}px "Inter", sans-serif`;
-    ctx.fillText(shipCharge === 0 ? 'FREE (₹0.00)' : fmtINR(shipCharge), sumX + sumW - s(14), sumY + s(46));
+    ctx.font = `700 ${s(8.4)}px "Inter", sans-serif`;
+    ctx.fillText(shipCharge === 0 ? 'FREE (₹0.00)' : fmtINR(shipCharge), sumX + sumW - s(12), bottomY + s(37));
 
-    // Grand Total Highlight Pill
-    drawRoundRect(sumX + s(8), sumY + s(60), sumW - s(16), s(42), s(8), '#17121F', '#C5A46D', s(1));
+    // Grand Total Dark Pill
+    drawRoundRect(sumX + s(8), bottomY + s(50), sumW - s(16), s(38), s(7), '#17121F', '#C5A46D', s(0.9));
     ctx.textAlign = 'left';
     ctx.fillStyle = '#C5A46D';
-    ctx.font = `700 ${s(11.5)}px "Inter", sans-serif`;
-    ctx.fillText('GRAND TOTAL', sumX + s(18), sumY + s(85));
+    ctx.font = `700 ${s(8.5)}px "Inter", sans-serif`;
+    ctx.fillText('GRAND TOTAL', sumX + s(16), bottomY + s(72.5));
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#F1E9DF';
-    ctx.font = `700 ${s(15)}px "Inter", sans-serif`;
-    ctx.fillText(fmtINR(grandTotal), sumX + sumW - s(18), sumY + s(86));
+    ctx.font = `700 ${s(11.8)}px "Inter", sans-serif`;
+    ctx.fillText(fmtINR(grandTotal), sumX + sumW - s(16), bottomY + s(73));
 
-    // Left Side: Terms & Policy Note beside Totals
-    const noteW = W - s(72) - sumW - s(18);
-    drawRoundRect(s(36), sumY, noteW, s(112), s(10), '#F5EFE6', 'rgba(197, 164, 109, 0.35)', s(0.9));
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#352343';
-    ctx.font = `700 ${s(10)}px "Inter", sans-serif`;
-    ctx.fillText('NOTES & RETURN POLICY', s(48), sumY + s(22));
+    // 5B. Center: Tilted Official Ink Stamp of Payment
+    const stampCfg = {
+      verified: {
+        color: '#15803D',
+        main: 'PAID & VERIFIED',
+        sub: ord.transaction_id ? `UTR: ${String(ord.transaction_id).slice(-12)}` : 'UPI PREPAID'
+      },
+      cod_paid: {
+        color: '#15803D',
+        main: 'PAID IN FULL',
+        sub: 'COD SETTLED'
+      },
+      cod_pending: {
+        color: '#B45309',
+        main: 'COD PAYABLE',
+        sub: `COLLECT ${fmtINR(grandTotal)}`
+      },
+      pending: {
+        color: '#92400E',
+        main: 'PAYMENT PENDING',
+        sub: 'AWAITING UTR CHECK'
+      },
+      rejected: {
+        color: '#B91C1C',
+        main: 'UNVERIFIED',
+        sub: 'PAYMENT REJECTED'
+      }
+    }[ord.payment_status] || {
+      color: '#352343',
+      main: 'ORDER RECORDED',
+      sub: orderDate
+    };
 
-    ctx.fillStyle = '#4B5563';
-    ctx.font = `400 ${s(9.2)}px "Inter", sans-serif`;
-    ctx.fillText('• Please record an unboxing video for damaged-in-transit claims.', s(48), sumY + s(40));
-    ctx.fillText('• UPI orders are dispatched after UTR verification.', s(48), sumY + s(56));
-    ctx.fillText('• Track live shipment status anytime under My Orders.', s(48), sumY + s(72));
-    ctx.fillStyle = '#8F6B2D';
-    ctx.font = `600 ${s(9.2)}px "Noto Serif Bengali", sans-serif`;
-    ctx.fillText('কথা Verse-এর সাথে থাকার জন্য আন্তরিক ধন্যবাদ।', s(48), sumY + s(94));
+    const stampCx = M + noteW + (sumX - (M + noteW)) / 2;
+    const stampCy = bottomY + boxH / 2;
+    const outerR = s(42);
+    const innerR = s(37);
 
-    // 6. Footer & Authorized Signatory Seal
-    const footY = H - s(112);
-    ctx.strokeStyle = 'rgba(197, 164, 109, 0.5)';
-    ctx.lineWidth = s(1);
+    ctx.save();
+    ctx.translate(stampCx, stampCy);
+    ctx.rotate((-14 * Math.PI) / 180);
+    ctx.globalAlpha = 0.86;
+    ctx.strokeStyle = stampCfg.color;
+    ctx.fillStyle = stampCfg.color;
+
+    // Outer & Inner Concentric Stamp Rings
+    ctx.lineWidth = s(1.8);
     ctx.beginPath();
-    ctx.moveTo(s(36), footY);
-    ctx.lineTo(W - s(36), footY);
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Right Signature Stamp
-    drawRoundRect(W - s(215), footY + s(12), s(179), s(56), s(8), '#FFFFFF', '#C5A46D', s(1));
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#352343';
-    ctx.font = `italic 700 ${s(13)}px "Playfair Display", serif`;
-    ctx.fillText('KothaVerse Store', W - s(125.5), footY + s(35));
-    ctx.fillStyle = '#8F6B2D';
-    ctx.font = `600 ${s(8.5)}px "Inter", sans-serif`;
-    ctx.fillText('AUTHORIZED DIGITAL SIGNATORY', W - s(125.5), footY + s(54));
+    ctx.lineWidth = s(0.8);
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+    ctx.stroke();
 
+    // Parallel Center Banner Lines inside Stamp
+    const halfChord = Math.sqrt(Math.max(0, innerR * innerR - s(10.5) * s(10.5)));
+    ctx.lineWidth = s(0.9);
+    ctx.beginPath();
+    ctx.moveTo(-halfChord, -s(10.5));
+    ctx.lineTo(halfChord, -s(10.5));
+    ctx.moveTo(-halfChord, s(10.5));
+    ctx.lineTo(halfChord, s(10.5));
+    ctx.stroke();
+
+    // Stamp Micro-Typography
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${s(5.8)}px "Inter", sans-serif`;
+    ctx.fillText('KOTHAVERSE STORE', 0, -s(20));
+
+    ctx.font = `700 ${s(5)}px "Inter", sans-serif`;
+    ctx.fillText('★ OFFICIAL SEAL ★', 0, -s(13.5));
+
+    ctx.font = `800 ${s(7.4)}px "Inter", sans-serif`;
+    ctx.fillText(stampCfg.main, 0, s(2.8));
+
+    ctx.font = `700 ${s(5.4)}px "Inter", sans-serif`;
+    ctx.fillText(stampCfg.sub.slice(0, 22), 0, s(18.5));
+
+    ctx.font = `600 ${s(5.2)}px "Inter", sans-serif`;
+    ctx.fillText(orderDate, 0, s(26));
+    ctx.restore();
+
+    // 6. Footer & Authorized Signatory Box
+    const footY = Math.max(bottomY + boxH + s(18), H - s(86));
+    ctx.strokeStyle = 'rgba(197, 164, 109, 0.5)';
+    ctx.lineWidth = s(0.8);
+    ctx.beginPath();
+    ctx.moveTo(M, footY);
+    ctx.lineTo(RIGHT, footY);
+    ctx.stroke();
+
+    // Left Footer Declarations
     ctx.textAlign = 'left';
     ctx.fillStyle = '#6B7280';
-    ctx.font = `400 ${s(9)}px "Inter", sans-serif`;
-    ctx.fillText('This is a computer-generated official invoice and does not require a physical stamp.', s(36), footY + s(32));
-    ctx.fillText('KothaVerse • বাংলা সাহিত্য, অডিও গল্প ও হার্ডকপি প্রকাশনা প্ল্যাটফর্ম', s(36), footY + s(49));
+    ctx.font = `400 ${s(7.4)}px "Inter", sans-serif`;
+    ctx.fillText(
+      'This is a computer-generated official invoice and does not require a physical signature.',
+      M,
+      footY + s(17)
+    );
+    ctx.fillStyle = '#352343';
+    ctx.font = `500 ${s(7.8)}px "Noto Serif Bengali", "Inter", sans-serif`;
+    ctx.fillText(
+      'KothaVerse (কথা Verse) • বাংলা সাহিত্য, অডিও গল্প ও হার্ডকপি প্রকাশনা প্ল্যাটফর্ম',
+      M,
+      footY + s(30)
+    );
+    ctx.fillStyle = '#8F6B2D';
+    ctx.font = `500 ${s(7.2)}px "Inter", sans-serif`;
+    ctx.fillText('Jurisdiction: Paschim Medinipur, West Bengal, India', M, footY + s(42));
+
+    // Right Authorized Signatory Box
+    const sigW = s(154);
+    const sigH = s(46);
+    const sigX = RIGHT - sigW;
+    const sigY = footY + s(9);
+    drawRoundRect(sigX, sigY, sigW, sigH, s(6), '#FFFFFF', '#C5A46D', s(0.8));
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#352343';
+    ctx.font = `italic 700 ${s(11.5)}px "Playfair Display", serif`;
+    ctx.fillText('KothaVerse', sigX + sigW / 2, sigY + s(21));
+
+    ctx.strokeStyle = 'rgba(197, 164, 109, 0.55)';
+    ctx.lineWidth = s(0.6);
+    ctx.beginPath();
+    ctx.moveTo(sigX + s(18), sigY + s(27));
+    ctx.lineTo(sigX + sigW - s(18), sigY + s(27));
+    ctx.stroke();
+
+    ctx.fillStyle = '#8F6B2D';
+    ctx.font = `700 ${s(6.6)}px "Inter", sans-serif`;
+    ctx.fillText('AUTHORIZED SIGNATORY', sigX + sigW / 2, sigY + s(38));
 
     // 7. Embed High-DPI Canvas into Vector A4 PDF via pdf-lib
     const pngDataUrl = canvas.toDataURL('image/png');
     const pdfDoc = await window.PDFLib.PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]);
+    pdfDoc.setTitle(`KothaVerse Invoice #${ord.order_code}`);
+    pdfDoc.setAuthor('KothaVerse');
+    pdfDoc.setSubject(`Retail Invoice for Order #${ord.order_code}`);
+
+    const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
     const pngImage = await pdfDoc.embedPng(pngDataUrl);
     page.drawImage(pngImage, {
       x: 0,
       y: 0,
-      width: 595.28,
-      height: 841.89
+      width: PAGE_W,
+      height: PAGE_H
     });
 
     const pdfBytes = await pdfDoc.save();
