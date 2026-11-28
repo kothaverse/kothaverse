@@ -2651,6 +2651,7 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
         ['users', 'Users & Mail Confirm', 'user-check'],
         ['popup', 'Special Popup', 'bell-ring'],
         ['store', 'E-Books & Orders', 'shopping-bag'],
+        ['physical_store', 'হার্ডকপি ও ডেলিভারি', 'truck'],
         ['settings', 'Website Settings', 'settings']
       ];
 
@@ -3355,6 +3356,9 @@ async function refreshAdminBadges() {
           await loadAdminPhase1Panel('admin-phase1-controls');
           await loadAdminPhase2Panel('admin-phase2-controls');
           await loadAdminPhase3Panel('admin-phase3-controls');
+         } else if (t === 'physical_store') {
+          box.innerHTML = `<div id="kv-admin-physical-root"></div>`;
+          await renderAdminPhysicalManager('kv-admin-physical-root');         
         } else if (t === 'users') {
           const { data: users, error } = await sb.rpc('get_admin_users');
           if (error) {
