@@ -9091,470 +9091,6 @@ function closePdfReaderModal() {
   }
 }
 // =========================================================================
-// PHYSICAL STORE (HARDCOPY BOOKS & MERCH) + ADMIN PRODUCT & DELIVERY SYSTEM
-// =========================================================================
-const kvPhysicalState = {
-  products: [],
-  myOrders: [],
-  adminOrders: [],
-  activeCategory: 'সব',
-  adminSubTab: 'products', // 'products' | 'deliveries'
-  deliveryFilter: 'all',
-  editingProductId: null
-};
-
-const KV_PRODUCT_CATEGORIES = ['হার্ডকপি বই', 'ডায়েরি ও নোটবুক', 'বুকমার্ক ও ফ্রেম', 'গিফট বক্স', 'অন্যান্য প্রোডাক্ট'];
-
-const KV_DELIVERY_STEPS = [
-  { key: 'placed', label: 'অর্ডার প্রাপ্ত' },
-  { key: 'confirmed', label: 'নিশ্চিত' },
-  { key: 'packed', label: 'প্যাক করা হয়েছে' },
-  { key: 'shipped', label: 'শিপড' },
-  { key: 'out_for_delivery', label: 'ডেলিভারির পথে' },
-  { key: 'delivered', label: 'ডেলিভারি সম্পন্ন' }
-];
-
-const KV_COURIERS = ['India Post', 'Delhivery', 'DTDC', 'BlueDart', 'Xpressbees', 'Ecom Express', 'Local Hand Delivery'];
-
-function _kvEsc(str) {
-  if (typeof escapeHtml === 'function') return escapeHtml(str ?? '');
-  return String(str ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
-
-function _kvGetEffectivePrice(p) {
-  const mrp = Number(p.price || 0);
-  const offer = Number(p.offer_price || 0);
-  if (offer > 0 && offer < mrp) return offer;
-  return mrp;
-}
-
-function _kvGetDiscountPercent(p) {
-  const mrp = Number(p.price || 0);
-  const offer = Number(p.offer_price || 0);
-  if (offer > 0 && offer < mrp && mrp > 0) {
-    return Math.round(((mrp - offer) / mrp) * 100);
-  }
-  return 0;
-}
-
-async function fetchPhysicalProducts(includeInactive = false) {
-  let query = sb.from('physical_products').select('*').order('created_at', { ascending: false });
-  if (!includeInactive) query = query.eq('is_active', true);
-  const { data, error } = await query;
-  if (error) {
-    console.error('Physical products load error:', error);
-    return [];
-  }
-  kvPhysicalState.products = data || [];
-  return kvPhysicalState.products;
-}
-
-async function fetchMyPhysicalOrders() {
-  if (!state?.user) {
-    kvPhysicalState.myOrders = [];
-    return [];
-  }
-  const { data, error } = await sb
-    .from('physical_orders')
-    .select('*')
-    .eq('user_id', state.user.id)
-    .order('created_at', { ascending: false });
-  if (!error) kvPhysicalState.myOrders = data || [];
-  return kvPhysicalState.myOrders;
-}
-
-// ---------- BUYER VIEW: HARDCOPY BOOKS & PHYSICAL PRODUCTS ----------
-async function renderPhysicalStoreSection(containerId = 'kv-physical-store-root') {
-  const root = document.getElementById(containerId);
-  if (!root) return;
-
-  root.innerHTML = `<div class="py-10 text-center text-xs text-ivory/60 font-bengali">হার্ডকপি বই ও প্রোডাক্ট লোড হচ্ছে...</div>`;
-  await Promise.all([fetchPhysicalProducts(false), fetchMyPhysicalOrders()]);
-
-  const categories = ['সব', ...KV_PRODUCT_CATEGORIES];
-  const filtered = kvPhysicalState.activeCategory === 'সব'
-    ? kvPhysicalState.products
-    : kvPhysicalState.products.filter((p) => p.category === kvPhysicalState.activeCategory);
-
-  root.innerHTML = `
-    <section class="space-y-8 font-bengali fade-in">
-      <!-- Header + Category Pills -->
-      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <span class="text-xs uppercase tracking-widest text-antiqueGold font-display">Hardcopy &amp; Physical Store</span>
-          <h2 class="text-2xl sm:text-3xl font-bold gold-gradient-text mt-1">হার্ডকপি বই ও স্পেশাল প্রোডাক্ট</h2>
-          <p class="text-xs text-ivory/70 mt-1">আপনার ঠিকানায় পৌঁছে যাবে KothaVerse-এর মুদ্রিত বই ও নান্দনিক সামগ্রী।</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          ${categories.map((cat) => `
-            <button type="button" onclick="kvPhysicalState.activeCategory='${cat}'; renderPhysicalStoreSection('${containerId}')"
-              class="px-3.5 py-1.5 rounded-xl text-xs border transition ${kvPhysicalState.activeCategory === cat ? 'bg-antiqueGold text-midnight border-antiqueGold font-bold' : 'bg-deepPurple/40 border-antiqueGold/25 text-ivory/80 hover:border-antiqueGold'}">
-              ${_kvEsc(cat)}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-
-      <!-- Product Grid -->
-      ${filtered.length === 0 ? `
-        <div class="glass-panel rounded-3xl p-10 text-center border border-antiqueGold/20 text-sm text-ivory/65">
-          এই বিভাগে এখনো কোনো প্রোডাক্ট যোগ করা হয়নি।
-        </div>
-      ` : `
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          ${filtered.map((p) => {
-            const effPrice = _kvGetEffectivePrice(p);
-            const disc = _kvGetDiscountPercent(p);
-            const outOfStock = Number(p.stock_qty || 0) <= 0;
-            return `
-              <div class="glass-panel rounded-3xl overflow-hidden border border-antiqueGold/25 flex flex-col justify-between group">
-                <div>
-                  <div class="relative h-56 bg-midnight/80 overflow-hidden">
-                    <img src="${_kvEsc(p.image_url || 'https://placehold.co/600x450/352343/C5A46D?text=KothaVerse')}" alt="${_kvEsc(p.title)}"
-                      class="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                      onerror="this.src='https://placehold.co/600x450/352343/C5A46D?text=KothaVerse'" />
-                    <span class="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-midnight/85 border border-antiqueGold/35 text-[10px] text-antiqueGold font-semibold">
-                      ${_kvEsc(p.category)}
-                    </span>
-                    ${disc > 0 ? `
-                      <span class="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold shadow">
-                        ${disc}% ছাড়
-                      </span>
-                    ` : ''}
-                    ${outOfStock ? `
-                      <div class="absolute inset-0 bg-black/65 flex items-center justify-center">
-                        <span class="px-4 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold">স্টক শেষ (Out of Stock)</span>
-                      </div>
-                    ` : ''}
-                  </div>
-
-                  <div class="p-5 space-y-2.5">
-                    <h3 class="text-base sm:text-lg font-bold text-ivory leading-snug">${_kvEsc(p.title)}</h3>
-                    ${p.description ? `<p class="text-xs text-ivory/70 line-clamp-2 leading-relaxed">${_kvEsc(p.description)}</p>` : ''}
-
-                    <!-- Price Row -->
-                    <div class="flex items-baseline gap-2 pt-1">
-                      <span class="text-xl font-bold font-mono text-antiqueGold">₹${effPrice}</span>
-                      ${disc > 0 ? `<span class="text-xs font-mono text-ivory/45 line-through">₹${Number(p.price)}</span>` : ''}
-                    </div>
-
-                    <!-- Delivery & COD Badges -->
-                    <div class="flex flex-wrap items-center gap-2 text-[11px] pt-1">
-                      ${p.is_free_delivery ? `
-                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-semibold">
-                          <i data-lucide="truck" class="w-3.5 h-3.5"></i> ফ্রি ডেলিভারি
-                        </span>
-                      ` : `
-                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-deepPurple/60 border border-antiqueGold/25 text-ivory/80">
-                          <i data-lucide="truck" class="w-3.5 h-3.5 text-antiqueGold"></i> ডেলিভারি চার্জ: ₹${Number(p.delivery_charge || 0)}
-                        </span>
-                      `}
-                      ${p.cod_available ? `
-                        <span class="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-200">COD উপলব্ধ</span>
-                      ` : ''}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="px-5 pb-5 pt-2 flex items-center justify-between gap-3">
-                  <span class="text-[11px] ${outOfStock ? 'text-red-400' : 'text-ivory/55'}">
-                    ${outOfStock ? 'স্টক নেই' : `স্টকে আছে: ${p.stock_qty} টি`}
-                  </span>
-                  <button type="button" ${outOfStock ? 'disabled' : ''} onclick="openPhysicalOrderModal('${p.id}')"
-                    class="px-5 py-2.5 rounded-xl text-xs font-bold transition ${outOfStock ? 'bg-ivory/10 text-ivory/40 cursor-not-allowed' : 'bg-antiqueGold text-midnight shadow-gold hover:opacity-90'}">
-                    অর্ডার করুন
-                  </button>
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `}
-
-      <!-- Buyer Live Delivery Tracking Section -->
-      ${state?.user && kvPhysicalState.myOrders.length > 0 ? `
-        <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30 space-y-5">
-          <div class="flex items-center justify-between gap-2">
-            <h3 class="text-lg sm:text-xl font-bold text-antiqueGold flex items-center gap-2">
-              <i data-lucide="package-check" class="w-5 h-5"></i> আমার হার্ডকপি ও প্রোডাক্ট অর্ডার ট্র্যাকিং
-            </h3>
-            <span class="text-xs text-ivory/60">মোট ${kvPhysicalState.myOrders.length} টি অর্ডার</span>
-          </div>
-
-          <div class="space-y-4">
-            ${kvPhysicalState.myOrders.map((ord) => {
-              const isCancelled = ord.delivery_status === 'cancelled';
-              const currentIdx = KV_DELIVERY_STEPS.findIndex((s) => s.key === ord.delivery_status);
-              return `
-                <div class="p-4 sm:p-5 rounded-2xl bg-midnight/75 border border-antiqueGold/20 space-y-4">
-                  <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="flex items-center gap-3">
-                      <img src="${_kvEsc(ord.product_image || 'https://placehold.co/80x80/352343/C5A46D?text=KV')}" class="w-14 h-14 rounded-xl object-cover border border-antiqueGold/25" />
-                      <div>
-                        <div class="text-xs font-mono text-antiqueGold font-bold">#${_kvEsc(ord.order_code)}</div>
-                        <div class="font-bold text-sm text-ivory">${_kvEsc(ord.product_title)} × ${ord.quantity}</div>
-                        <div class="text-[11px] text-ivory/65">মোট: <strong class="text-antiqueGold">₹${ord.total_amount}</strong> (${_kvEsc(ord.payment_method)} • ${_kvEsc(ord.payment_status)})</div>
-                      </div>
-                    </div>
-                    <div class="text-right text-[11px] text-ivory/65">
-                      <div>${new Date(ord.created_at).toLocaleDateString('bn-IN')}</div>
-                      ${ord.expected_delivery ? `<div class="text-emerald-300 font-semibold mt-0.5">সম্ভাব্য ডেলিভারি: ${_kvEsc(ord.expected_delivery)}</div>` : ''}
-                    </div>
-                  </div>
-
-                  ${isCancelled ? `
-                    <div class="p-3 rounded-xl bg-red-500/15 border border-red-400/35 text-xs text-red-300">
-                      এই অর্ডারটি বাতিল করা হয়েছে। ${ord.admin_note ? `কারণ: ${_kvEsc(ord.admin_note)}` : ''}
-                    </div>
-                  ` : `
-                    <!-- 6-Step Progress Bar -->
-                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
-                      ${KV_DELIVERY_STEPS.map((st, idx) => {
-                        const done = idx <= currentIdx;
-                        return `
-                          <div class="p-2 rounded-xl border text-[10px] ${done ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-200 font-bold' : 'bg-deepPurple/25 border-ivory/10 text-ivory/40'}">
-                            <div>${done ? '✓' : idx + 1}</div>
-                            <div class="mt-0.5">${st.label}</div>
-                          </div>
-                        `;
-                      }).join('')}
-                    </div>
-                  `}
-
-                  ${ord.courier_name || ord.tracking_number ? `
-                    <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-deepPurple/40 border border-antiqueGold/20 text-xs">
-                      <div>
-                        <span class="text-ivory/65">কুরিয়ার:</span> <strong class="text-ivory">${_kvEsc(ord.courier_name || 'নির্ধারিত হচ্ছে')}</strong>
-                        ${ord.tracking_number ? `<span class="mx-2 text-ivory/30">|</span> <span class="text-ivory/65">ট্র্যাকিং ID:</span> <strong class="font-mono text-antiqueGold">${_kvEsc(ord.tracking_number)}</strong>` : ''}
-                      </div>
-                      <div class="flex items-center gap-2">
-                        ${ord.tracking_number ? `<button type="button" onclick="navigator.clipboard?.writeText('${_kvEsc(ord.tracking_number)}'); showToast('ট্র্যাকিং আইডি কপি হয়েছে!', 'success')" class="px-2.5 py-1 rounded-lg bg-midnight border border-antiqueGold/30 text-[11px] text-antiqueGold">কপি</button>` : ''}
-                        ${ord.tracking_url ? `<a href="${_kvEsc(ord.tracking_url)}" target="_blank" rel="noopener noreferrer" class="px-3 py-1 rounded-lg bg-antiqueGold text-midnight font-bold text-[11px]">লাইভ ট্র্যাক করুন</a>` : ''}
-                      </div>
-                    </div>
-                  ` : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      ` : ''}
-    </section>
-  `;
-
-  if (window.lucide) lucide.createIcons();
-}
-
-// ---------- BUYER BOOKING MODAL (SHIPPING ADDRESS + UPI / COD) ----------
-function openPhysicalOrderModal(productId) {
-  if (!state?.user) {
-    showToast('অর্ডার করতে প্রথমে লগইন করুন।', 'error');
-    if (typeof openModal === 'function') openModal('auth-modal');
-    return;
-  }
-
-  const product = kvPhysicalState.products.find((p) => p.id === productId);
-  if (!product) return;
-
-  let modal = document.getElementById('kv-physical-order-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'kv-physical-order-modal';
-    modal.className = 'fixed inset-0 z-[95] bg-black/80 backdrop-blur-md hidden items-center justify-center p-3 sm:p-5 overflow-y-auto';
-    document.body.appendChild(modal);
-  }
-
-  const unitPrice = _kvGetEffectivePrice(product);
-  const shipCharge = product.is_free_delivery ? 0 : Number(product.delivery_charge || 0);
-  const upiId = state?.storeSettings?.upi_id || 'admin@upi';
-  const qrUrl = state?.storeSettings?.qr_image_url || state?.storeSettings?.upi_qr_url || '';
-
-  modal.innerHTML = `
-    <div class="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-midnight border border-antiqueGold/40 shadow-card p-5 sm:p-7 font-bengali my-auto fade-in">
-      <div class="flex items-start justify-between gap-3 pb-4 border-b border-antiqueGold/20">
-        <div>
-          <h3 class="text-lg sm:text-xl font-bold text-antiqueGold">প্রোডাক্ট বুকিং ও ডেলিভারি তথ্য</h3>
-          <p class="text-xs text-ivory/70 mt-0.5">${_kvEsc(product.title)}</p>
-        </div>
-        <button type="button" onclick="closePhysicalOrderModal()" class="p-1.5 rounded-xl bg-deepPurple/60 text-ivory hover:text-antiqueGold">✕</button>
-      </div>
-
-      <form onsubmit="submitPhysicalOrder(event, '${product.id}')" class="space-y-4 mt-4 text-xs sm:text-sm">
-        <!-- Quantity & Live Total Box -->
-        <div class="p-4 rounded-2xl bg-deepPurple/40 border border-antiqueGold/25 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-ivory/80">পরিমাণ (Quantity)</span>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="changePhysicalOrderQty(-1, ${unitPrice}, ${shipCharge}, ${product.stock_qty})" class="w-7 h-7 rounded-lg bg-midnight border border-antiqueGold/35 text-antiqueGold font-bold">-</button>
-              <input id="po-qty" type="number" min="1" max="${product.stock_qty}" value="1" readonly class="w-12 text-center bg-transparent font-mono font-bold text-ivory" />
-              <button type="button" onclick="changePhysicalOrderQty(1, ${unitPrice}, ${shipCharge}, ${product.stock_qty})" class="w-7 h-7 rounded-lg bg-midnight border border-antiqueGold/35 text-antiqueGold font-bold">+</button>
-            </div>
-          </div>
-          <div class="flex justify-between text-xs text-ivory/70">
-            <span>প্রোডাক্ট মূল্য</span>
-            <span id="po-subtotal" class="font-mono">₹${unitPrice}</span>
-          </div>
-          <div class="flex justify-between text-xs text-ivory/70">
-            <span>ডেলিভারি চার্জ</span>
-            <span class="font-mono ${shipCharge === 0 ? 'text-emerald-300 font-bold' : ''}">${shipCharge === 0 ? 'ফ্রি (₹0)' : `₹${shipCharge}`}</span>
-          </div>
-          <div class="flex justify-between pt-2 border-t border-antiqueGold/20 text-sm font-bold">
-            <span class="text-ivory">সর্বমোট প্রদেয়</span>
-            <span id="po-grand-total" class="font-mono text-antiqueGold text-base">₹${unitPrice + shipCharge}</span>
-          </div>
-        </div>
-
-        <!-- Shipping Address Fields -->
-        <div class="space-y-3">
-          <div class="text-xs font-bold text-antiqueGold uppercase tracking-wider">ডেলিভারি ঠিকানা</div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input id="po-name" required value="${_kvEsc(state?.profile?.full_name || '')}" placeholder="প্রাপকের সম্পূর্ণ নাম*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-            <input id="po-phone" required type="tel" pattern="[0-9]{10}" placeholder="মোবাইল / WhatsApp (10 digit)*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-          </div>
-          <textarea id="po-address" required rows="2" placeholder="বাড়ি নং / গ্রাম / পাড়া / পোস্ট অফিস*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25"></textarea>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input id="po-city" required placeholder="শহর / জেলা*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-            <input id="po-state" required value="West Bengal" placeholder="রাজ্য*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-            <input id="po-pin" required type="text" pattern="[0-9]{6}" maxlength="6" placeholder="PIN Code (6 digit)*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 font-mono" />
-          </div>
-          <input id="po-landmark" placeholder="কাছাকাছি পরিচিত স্থান / Landmark (ঐচ্ছিক)" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25" />
-        </div>
-
-        <!-- Payment Mode -->
-        <div class="space-y-3 pt-1">
-          <div class="text-xs font-bold text-antiqueGold uppercase tracking-wider">পেমেন্ট মাধ্যম</div>
-          <div class="grid grid-cols-2 gap-2.5 text-xs">
-            <label class="flex items-center gap-2 p-3 rounded-xl bg-deepPurple/45 border border-antiqueGold/35 cursor-pointer">
-              <input type="radio" name="po-pay-method" value="UPI" checked onchange="togglePhysicalPaymentFields()" class="accent-antiqueGold" />
-              <span>UPI পেমেন্ট (প্রিপেইড)</span>
-            </label>
-            ${product.cod_available ? `
-              <label class="flex items-center gap-2 p-3 rounded-xl bg-deepPurple/45 border border-antiqueGold/35 cursor-pointer">
-                <input type="radio" name="po-pay-method" value="COD" onchange="togglePhysicalPaymentFields()" class="accent-antiqueGold" />
-                <span>Cash on Delivery</span>
-              </label>
-            ` : `
-              <div class="flex items-center justify-center p-3 rounded-xl bg-midnight/60 border border-ivory/10 text-ivory/45">
-                COD উপলব্ধ নয়
-              </div>
-            `}
-          </div>
-
-          <div id="po-upi-box" class="p-4 rounded-2xl bg-deepPurple/35 border border-antiqueGold/25 space-y-3">
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-              ${qrUrl ? `<img src="${_kvEsc(qrUrl)}" alt="UPI QR" class="w-28 h-28 rounded-xl bg-white p-1.5 object-contain border border-antiqueGold/40" />` : ''}
-              <div class="text-xs space-y-1 flex-1">
-                <div class="text-antiqueGold font-bold">সর্বমোট টাকা নিচের UPI-তে পাঠান:</div>
-                <div class="font-mono text-ivory bg-midnight/80 px-3 py-1.5 rounded-lg border border-antiqueGold/25 inline-block">${_kvEsc(upiId)}</div>
-                <p class="text-[11px] text-ivory/65">পেমেন্ট সম্পন্ন হলে ১২ সংখ্যার UPI UTR / Reference নম্বর নিচে লিখুন।</p>
-              </div>
-            </div>
-            <input id="po-utr" required type="text" minlength="8" maxlength="24" placeholder="১২ সংখ্যার UPI UTR / Transaction ID*" class="w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/30 font-mono text-xs" />
-          </div>
-        </div>
-
-        <!-- Privacy & Refund Policy Consent -->
-        <div class="text-[11px] text-ivory/65 leading-relaxed bg-midnight/70 px-3 py-2 rounded-xl border border-antiqueGold/15">
-          অর্ডার কনফার্ম করার মাধ্যমে আপনি আমাদের
-          <button type="button" onclick="openKvStorePolicyModal('privacy')" class="text-antiqueGold underline font-semibold">Privacy Policy</button>
-          এবং
-          <button type="button" onclick="openKvStorePolicyModal('refund')" class="text-antiqueGold underline font-semibold">Refund Policy</button>-তে সম্মতি দিচ্ছেন।
-        </div>
-
-        <button id="po-submit-btn" type="submit" class="w-full py-3 rounded-xl bg-antiqueGold text-midnight font-bold shadow-gold hover:opacity-90 transition">
-          অর্ডার কনফার্ম করুন
-        </button>
-      </form>
-    </div>
-  `;
-
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-}
-
-function closePhysicalOrderModal() {
-  const modal = document.getElementById('kv-physical-order-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-}
-
-function changePhysicalOrderQty(delta, unitPrice, shipCharge, maxStock) {
-  const input = document.getElementById('po-qty');
-  if (!input) return;
-  const next = Math.max(1, Math.min(maxStock, Number(input.value || 1) + delta));
-  input.value = next;
-  const sub = unitPrice * next;
-  document.getElementById('po-subtotal').textContent = `₹${sub}`;
-  document.getElementById('po-grand-total').textContent = `₹${sub + shipCharge}`;
-}
-
-function togglePhysicalPaymentFields() {
-  const selected = document.querySelector('input[name="po-pay-method"]:checked')?.value || 'UPI';
-  const upiBox = document.getElementById('po-upi-box');
-  const utrInput = document.getElementById('po-utr');
-  if (selected === 'COD') {
-    upiBox?.classList.add('hidden');
-    if (utrInput) { utrInput.required = false; utrInput.value = ''; }
-  } else {
-    upiBox?.classList.remove('hidden');
-    if (utrInput) utrInput.required = true;
-  }
-}
-
-async function submitPhysicalOrder(e, productId) {
-  e.preventDefault();
-  const btn = document.getElementById('po-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'অর্ডার জমা হচ্ছে...'; }
-
-  try {
-    const paymentMethod = document.querySelector('input[name="po-pay-method"]:checked')?.value || 'UPI';
-    const utr = paymentMethod === 'UPI' ? (document.getElementById('po-utr')?.value || '').trim() : null;
-    if (paymentMethod === 'UPI' && (!utr || utr.length < 8)) {
-      throw new Error('সঠিক UPI UTR নম্বর লিখুন।');
-    }
-
-    const orderCode = 'KVP-' + Date.now().toString().slice(-6) + Math.floor(10 + Math.random() * 89);
-
-    const payload = {
-      order_code: orderCode,
-      user_id: state.user.id,
-      product_id: productId,
-      product_title: '',
-      quantity: Number(document.getElementById('po-qty')?.value || 1),
-      unit_price: 0,
-      delivery_charge: 0,
-      total_amount: 0,
-      buyer_name: document.getElementById('po-name').value.trim(),
-      phone: document.getElementById('po-phone').value.trim(),
-      address_line: document.getElementById('po-address').value.trim(),
-      city: document.getElementById('po-city').value.trim(),
-      state: document.getElementById('po-state').value.trim(),
-      pincode: document.getElementById('po-pin').value.trim(),
-      landmark: document.getElementById('po-landmark').value.trim(),
-      payment_method: paymentMethod,
-      transaction_id: utr
-    };
-
-    const { error } = await sb.from('physical_orders').insert(payload);
-    if (error) {
-      if (String(error.message || '').includes('unique_physical_order_utr')) {
-        throw new Error('এই UTR নম্বরটি ইতিমধ্যেই ব্যবহৃত হয়েছে।');
-      }
-      throw error;
-    }
-
-    closePhysicalOrderModal();
-    showToast(`অর্ডার সফল হয়েছে! অর্ডার কোড: #${orderCode}`, 'success');
-    await renderPhysicalStoreSection();
-  } catch (err) {
-    showToast(err?.message || 'অর্ডার সাবমিট ব্যর্থ হয়েছে।', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'অর্ডার কনফার্ম করুন'; }
-  }
-}
-
-// =========================================================================
 // PHYSICAL STORE (ADD TO CART) + SEPARATED ORDER TRACKING + ADMIN MANAGER
 // =========================================================================
 const KV_CART_STORAGE_KEY = 'kv_physical_cart_v1';
@@ -10054,7 +9590,8 @@ async function openKvCartModal(step = 'cart') {
   const summary = getKvCartSummary();
   if (step === 'checkout' && !state?.user) {
     showToast('চেকআউট করতে প্রথমে লগইন করুন।', 'error');
-    if (typeof openModal === 'function') openModal('auth-modal');
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    else if (typeof openModal === 'function') openModal('auth-modal');
     return;
   }
 
@@ -10289,13 +9826,12 @@ async function submitKvCartOrder(e) {
     closeKvCartModal();
     showToast(`অর্ডার সফল হয়েছে! অর্ডার কোড: #${data?.order_code || ''}`, 'success');
 
-    // Direct Order Tracking tab-e niye jabe
     state.storeTab = 'my_orders';
     renderCurrentRoute();
   } catch (err) {
     showToast(err?.message || 'অর্ডার সাবমিট ব্যর্থ হয়েছে।', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'অর্ডার কনফার্ম করুন'; }
+    if (btn) { btn.disabled = false; btn.textContent = `₹${summary.grandTotal} অর্ডার কনফার্ম করুন`; }
   }
 }
 
@@ -10475,7 +10011,7 @@ async function renderAdminPhysicalManager(containerId = 'kv-admin-physical-root'
                     <div class="text-ivory/70 mt-1">
                       মোট: <strong class="text-antiqueGold">₹${ord.total_amount}</strong> (ডেলিভারি ₹${ord.delivery_charge})
                       • মাধ্যম: <strong>${_kvEsc(ord.payment_method)}</strong>
-                      ${ord.transaction_id ? `• UTR: <span class="font-mono text-emerald-300">${_kvEsc(ord.transaction_id)}</span>` : ''}
+                      ${ord.transaction_id ? ` • UTR: <span class="font-mono text-emerald-300">${_kvEsc(ord.transaction_id)}</span>` : ''}
                     </div>
                   </div>
                   <a href="https://wa.me/91${_kvEsc(String(ord.phone || '').replace(/\D/g, '').slice(-10))}?text=${encodeURIComponent(`নমস্কার ${ord.buyer_name}, আপনার KothaVerse অর্ডার #${ord.order_code} আপডেট: ${ord.delivery_status}${ord.tracking_number ? ` | Tracking ID: ${ord.tracking_number}` : ''}`)}"
@@ -10543,6 +10079,7 @@ async function renderAdminPhysicalManager(containerId = 'kv-admin-physical-root'
 async function handleAdminSavePhysicalProduct(e, containerId) {
   e.preventDefault();
   const btn = document.getElementById('ap-save-btn');
+  const prevText = btn ? btn.textContent : 'প্রোডাক্ট প্রকাশ করুন';
   if (btn) { btn.disabled = true; btn.textContent = 'সংরক্ষণ হচ্ছে...'; }
 
   try {
@@ -10590,7 +10127,7 @@ async function handleAdminSavePhysicalProduct(e, containerId) {
   } catch (err) {
     showToast('প্রোডাক্ট সেভ ত্রুটি: ' + (err?.message || err), 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'প্রোডাক্ট প্রকাশ করুন'; }
+    if (btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
 
