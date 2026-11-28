@@ -2449,7 +2449,7 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
     function renderAboutPage() {
       const cfg = getSiteSettings();
       return `
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-12 fade-in font-bengali space-y-8">
+       <div class="max-w-5xl mx-auto px-4 sm:px-6 py-12 fade-in font-bengali space-y-8">
           <!-- Hero Brand Story Card -->
           <div class="glass-panel rounded-3xl p-8 sm:p-12 border border-antiqueGold/35 shadow-card relative overflow-hidden space-y-6">
             <div class="flex flex-wrap items-center justify-between gap-4">
@@ -2462,7 +2462,7 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
             <div class="space-y-3">
               <h1 class="text-3xl sm:text-5xl font-bold gold-gradient-text leading-tight">${escapeHtml(cfg.tagline)}</h1>
               <p class="text-sm sm:text-base text-ivory/80 leading-loose">
-                <strong>KothaVerse (কথা Verse)</strong> হলো বাংলা কবিতা, আবৃত্তি, অডিও গল্প এবং আধুনিক ডিজিটাল প্রকাশনার একটি নান্দনিক ও নীরব সাহিত্য ভুবন। ব্যস্ত যান্ত্রিক জীবনের মাঝে একটুখানি শান্ত অবসর তৈরি করাই আমাদের লক্ষ্য—যেখানে পাঠক Distraction-Free মোডে কবিতা পড়তে পারবেন, রাতের নীরবতায় Sleep &amp; Ambient Mode চালু করে অডিও গল্প শুনতে পারবেন এবং প্রিয়জনের জন্য বিশেষ ই-বুক বা কাস্টম ভয়েস গিফট পাঠাতে পারবেন।
+                <strong>KothaVerse (কথা Verse)</strong> হলো বাংলা কবিতা, আবৃত্তি, অডিও গল্প এবং আধুনিক ডিজিটাল ও মুদ্রিত প্রকাশনার একটি নান্দনিক সাহিত্য ভুবন। ব্যস্ত যান্ত্রিক জীবনের মাঝে একটুখানি শান্ত অবসর তৈরি করাই আমাদের লক্ষ্য—যেখানে পাঠক Distraction-Free মোডে কবিতা পড়তে পারবেন, রাতের নীরবতায় Sleep &amp; Ambient Mode চালু করে অডিও গল্প শুনতে পারবেন এবং প্রিয়জনের জন্য সুরক্ষিত ই-বুক, হার্ডকপি বই কিংবা কাস্টম ভয়েস গিফট অর্ডার করতে পারবেন।
               </p>
             </div>
 
@@ -2473,12 +2473,12 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
                 <div class="text-[11px] text-ivory/70 mt-0.5">নির্বাচিত কবিতা</div>
               </div>
               <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
-                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.audioStories || []).length}+</div>
+                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.audioStories || []).length + (state.recitations || []).length}+</div>
                 <div class="text-[11px] text-ivory/70 mt-0.5">অডিও গল্প ও আবৃত্তি</div>
               </div>
               <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
-                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.ebooks || []).length}+</div>
-                <div class="text-[11px] text-ivory/70 mt-0.5">প্রিমিয়াম ই-বুক</div>
+                <div class="text-xl sm:text-2xl font-mono font-bold text-antiqueGold">${(state.ebooks || []).length + (typeof kvPhysicalState !== 'undefined' ? (kvPhysicalState.products || []).length : 0)}+</div>
+                <div class="text-[11px] text-ivory/70 mt-0.5">ই-বুক ও হার্ডকপি বই</div>
               </div>
               <div class="p-3.5 rounded-2xl bg-midnight/70 border border-antiqueGold/20 text-center">
                 <div class="text-xl sm:text-2xl font-mono font-bold text-emerald-300">১০০%</div>
@@ -2497,32 +2497,32 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
                 <i data-lucide="feather" class="w-6 h-6 text-antiqueGold"></i>
-                <h3 class="font-bold text-base text-ivory">কবিতা ও সাহিত্য</h3>
-                <p class="text-xs text-ivory/70 leading-relaxed">১২টি সমৃদ্ধ বিভাগে নির্বাচিত বাংলা কবিতা, Distraction-Free রিডিং মোড এবং শেয়ারযোগ্য Quote Card তৈরির সুবিধা।</p>
+                <h3 class="font-bold text-base text-ivory">কবিতা ও ডিজিটাল চিঠি</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">সমৃদ্ধ বিভাগে নির্বাচিত বাংলা কবিতা, Distraction-Free রিডিং মোড, Quote Card এবং প্রিয়জনকে ডিজিটাল চিঠি পাঠানোর সুবিধা।</p>
               </div>
 
               <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
                 <i data-lucide="headphones" class="w-6 h-6 text-antiqueGold"></i>
                 <h3 class="font-bold text-base text-ivory">অডিও গল্প ও আবৃত্তি</h3>
-                <p class="text-xs text-ivory/70 leading-relaxed">সিনেমাটিক আবহে অডিও স্টোরি, নন-স্টপ ব্যাকগ্রাউন্ড প্লেয়ার এবং রাতের শান্তির জন্য Sleep &amp; Ambient সাউন্ড।</p>
+                <p class="text-xs text-ivory/70 leading-relaxed">সিনেমাটিক আবহে অডিও স্টোরি, নন-স্টপ ব্যাকগ্রাউন্ড প্লেয়ার এবং রাতের শান্তির জন্য Sleep &amp; Ambient সাউন্ড মিক্সার।</p>
               </div>
 
               <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
                 <i data-lucide="book-open" class="w-6 h-6 text-antiqueGold"></i>
-                <h3 class="font-bold text-base text-ivory">ই-বুক সংকলন ও কম্বো</h3>
-                <p class="text-xs text-ivory/70 leading-relaxed">ফ্রি স্যাম্পল প্রিভিউ পড়ে বেছে নিন প্রিয় বই—কেনার পর পাঠকের নামে ওয়াটারমার্কসহ PDF রিডার ও ডাউনলোড সুবিধা।</p>
+                <h3 class="font-bold text-base text-ivory">সুরক্ষিত ই-বুক সংকলন</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">ফ্রি স্যাম্পল প্রিভিউ পড়ে বেছে নিন প্রিয় বই—কেনার পর পাঠকের নামে ওয়াটারমার্কসহ সুরক্ষিত ইন-অ্যাপ রিডারে পড়ার সুবিধা।</p>
+              </div>
+
+              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
+                <i data-lucide="shopping-bag" class="w-6 h-6 text-antiqueGold"></i>
+                <h3 class="font-bold text-base text-ivory">হার্ডকপি বই ও স্পেশাল প্রোডাক্ট</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">মুদ্রিত বই, ডায়েরি, বুকমার্ক ও গিফট বক্স কার্টে যোগ করে অর্ডার করুন—সাথে থাকছে লাইভ ডেলিভারি ট্র্যাকিং ও অফিসিয়াল PDF ইনভয়েস।</p>
               </div>
 
               <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
                 <i data-lucide="mic" class="w-6 h-6 text-antiqueGold"></i>
-                <h3 class="font-bold text-base text-ivory">কাস্টম ভয়েস গিফট</h3>
-                <p class="text-xs text-ivory/70 leading-relaxed">জন্মদিন, বার্ষিকী বা বিশেষ দিনে আমাদের কণ্ঠশিল্পীদের কণ্ঠে প্রিয়জনের নাম নিয়ে আবৃত্তি, ব্যাকগ্রাউন্ড মিউজিক ও রিল গিফট।</p>
-              </div>
-
-              <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
-                <i data-lucide="gift" class="w-6 h-6 text-antiqueGold"></i>
-                <h3 class="font-bold text-base text-ivory">গিফট কোড ও ওয়ালেট</h3>
-                <p class="text-xs text-ivory/70 leading-relaxed">ইউনিক গিফট কোডের মাধ্যমে প্রিয়জনকে ই-বুক উপহার দিন এবং বন্ধুদের রেফার করে জিতে নিন KothaVerse ওয়ালেট ক্রেডিট।</p>
+                <h3 class="font-bold text-base text-ivory">কাস্টম ভয়েস ও গিফট কার্ড</h3>
+                <p class="text-xs text-ivory/70 leading-relaxed">বিশেষ দিনে প্রিয়জনের নাম নিয়ে কাস্টম ভয়েস ডেডিকেশন, ইউনিক ই-বুক গিফট কোড এবং রেফারেল ওয়ালেট ক্রেডিটের সুবিধা।</p>
               </div>
 
               <div class="p-5 rounded-2xl bg-midnight/65 border border-antiqueGold/20 hover:border-antiqueGold/45 transition space-y-2">
@@ -2539,8 +2539,8 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
               <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
                 <i data-lucide="shield-check" class="w-4 h-4"></i> স্বচ্ছ ও নিরাপদ অভিজ্ঞতা
               </div>
-              <h3 class="text-lg sm:text-xl font-bold text-ivory">লাইভ অর্ডার ট্র্যাকিং, অফিসিয়াল PDF ইনভয়েস ও ভেরিফায়েড রিভিউ</h3>
-              <p class="text-xs text-ivory/70">প্রতিটি স্টোর অর্ডারে থাকছে সরাসরি UPI পেমেন্ট, রিয়েল-টাইম স্ট্যাটাস আপডেট এবং ব্র্যান্ডেড ডিজিটাল রসিদ।</p>
+              <h3 class="text-lg sm:text-xl font-bold text-ivory">লাইভ অর্ডার ট্র্যাকিং, অফিসিয়াল A4 PDF ইনভয়েস ও ভেরিফায়েড রিভিউ</h3>
+              <p class="text-xs text-ivory/70">প্রতিটি স্টোর অর্ডারে থাকছে সরাসরি UPI / COD পেমেন্ট, রিয়েল-টাইম ডেলিভারি আপডেট এবং ব্র্যান্ডেড ডিজিটাল রসিদ।</p>
               <div class="flex flex-wrap items-center gap-3 pt-1.5 text-xs">
                 <button type="button" onclick="openKvStorePolicyModal('privacy')" class="inline-flex items-center gap-1 text-antiqueGold hover:text-amber-300 underline underline-offset-4 font-semibold transition">
                   <i data-lucide="lock" class="w-3.5 h-3.5"></i> Privacy Policy
@@ -2553,13 +2553,13 @@ ${(state.profile?.role === 'admin' || (state.user && p.created_by === state.user
             </div>
 
             <div class="flex flex-wrap gap-2.5 shrink-0 text-xs">
-              <button onclick="navigate('poetry')" class="px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold hover:opacity-90 transition">
+              <button type="button" onclick="navigate('poetry')" class="px-5 py-2.5 rounded-xl bg-antiqueGold text-midnight font-semibold shadow-gold hover:opacity-90 transition">
                 কবিতা পড়ুন
               </button>
-              <button onclick="navigate('store')" class="px-5 py-2.5 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold transition">
+              <button type="button" onclick="navigate('store')" class="px-5 py-2.5 rounded-xl bg-deepPurple border border-antiqueGold/40 text-antiqueGold hover:bg-antiqueGold hover:text-midnight font-semibold transition">
                 স্টোর দেখুন
               </button>
-              <button onclick="navigate('submit')" class="px-4 py-2.5 rounded-xl bg-midnight/80 border border-ivory/20 text-ivory hover:border-antiqueGold transition">
+              <button type="button" onclick="navigate('community'); setTimeout(() => { document.querySelector('#app-root form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);" class="px-4 py-2.5 rounded-xl bg-midnight/80 border border-ivory/20 text-ivory hover:border-antiqueGold transition">
                 লেখা পাঠান
               </button>
             </div>
@@ -8871,30 +8871,34 @@ function openKvStorePolicyModal(activeTab = 'refund') {
       <!-- Policy Content -->
       <div class="p-5 overflow-y-auto space-y-3 text-xs text-ivory/85 leading-relaxed flex-1">
         ${isRefund ? `
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
             <h4 class="font-bold text-antiqueGold text-sm">১. ডিজিটাল ই-বুক, কম্বো প্যাক ও গিফট কোড</h4>
-            <p>ডিজিটাল প্রোডাক্ট একবার আনলক বা ডেলিভারি হয়ে গেলে তা ফেরতযোগ্য (Non-Refundable) নয়। তবে পেমেন্ট যাচাই হওয়ার ২৪ ঘণ্টার মধ্যে অ্যাক্সেস না পেলে বা ফাইল ত্রুটিপূর্ণ হলে সম্পূর্ণ রিফান্ড বা বিকল্প কপি দেওয়া হবে।</p>
+            <p>একবার আনলক বা অ্যাপ রিডারে অ্যাক্সেস চালু হয়ে গেলে ডিজিটাল প্রোডাক্ট ফেরতযোগ্য (Non-Refundable) নয়। তবে পেমেন্ট যাচাই হওয়ার ২৪ ঘণ্টার মধ্যে অ্যাক্সেস না পেলে বা ফাইল ত্রুটিপূর্ণ হলে সম্পূর্ণ রিফান্ড বা বিকল্প কপি দেওয়া হবে।</p>
           </div>
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
-            <h4 class="font-bold text-antiqueGold text-sm">২. কাস্টম ভয়েস ডেডিকেশন</h4>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
+            <h4 class="font-bold text-antiqueGold text-sm">২. হার্ডকপি বই ও ফিজিক্যাল প্রোডাক্ট</h4>
+            <p>পার্সেল ডিসপ্যাচ বা শিপ (Shipped) হওয়ার আগে অর্ডার বাতিল করলে সম্পূর্ণ টাকা ফেরত পাবেন। ডেলিভারির পর সাধারণ ক্ষেত্রে রিটার্ন প্রযোজ্য নয়; তবে ভুল প্রোডাক্ট বা পরিবহনে ক্ষতিগ্রস্ত (Damaged) বই/পণ্য পেলে ডেলিভারির ৪৮ ঘণ্টার মধ্যে বিরতিহীন আনবক্সিং ভিডিওসহ (Unboxing Video) সাপোর্টে যোগাযোগ করলে বিনামূল্যে রিপ্লেসমেন্ট বা রিফান্ড দেওয়া হবে।</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
+            <h4 class="font-bold text-antiqueGold text-sm">৩. কাস্টম ভয়েস ডেডিকেশন</h4>
             <p>ভয়েস রেকর্ডিং শুরু হওয়ার আগে অর্ডার বাতিল করলে ১০০% টাকা ফেরত পাবেন। রেকর্ডিং সম্পন্ন হয়ে গেলে অর্ডার বাতিল বা রিফান্ড প্রযোজ্য নয়।</p>
           </div>
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
-            <h4 class="font-bold text-antiqueGold text-sm">৩. ডাবল পেমেন্ট বা ভুল UTR সংক্রান্ত রিফান্ড</h4>
-            <p>একই অর্ডারে দুবার টাকা কেটে গেলে বা ভুলবশত অতিরিক্ত পেমেন্ট হলে সঠিক UTR ও স্ক্রিনশটসহ সাপোর্টে যোগাযোগ করলে যাচাই সাপেক্ষে ৩-৫ কার্যদিবসের মধ্যে মূল UPI অ্যাকাউন্টে টাকা ফেরত পাঠানো হবে।</p>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
+            <h4 class="font-bold text-antiqueGold text-sm">৪. ডাবল পেমেন্ট বা ভুল UTR সংক্রান্ত রিফান্ড</h4>
+            <p>একই অর্ডারে দুবার টাকা কেটে গেলে বা ভুলবশত অতিরিক্ত পেমেন্ট হলে সঠিক UTR ও পেমেন্ট স্ক্রিনশটসহ সাপোর্টে যোগাযোগ করলে যাচাই সাপেক্ষে ৩–৫ কার্যদিবসের মধ্যে মূল UPI অ্যাকাউন্টে টাকা ফেরত পাঠানো হবে।</p>
           </div>
         ` : `
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
             <h4 class="font-bold text-antiqueGold text-sm">১. সংগৃহীত তথ্যের ব্যবহার</h4>
-            <p>অর্ডার যাচাই, পাঠকের নামে ওয়াটারমার্কযুক্ত PDF তৈরি এবং WhatsApp বা ইমেইলে ডেলিভারি আপডেট পাঠানোর জন্য কেবল আপনার নাম, যোগাযোগের নম্বর এবং ১২ সংখ্যার UPI UTR সংরক্ষণ করা হয়।</p>
+            <p>অর্ডার যাচাই, পাঠকের নামে ওয়াটারমার্কযুক্ত রিডার অ্যাক্সেস তৈরি এবং WhatsApp বা ইমেইলে আপডেট পাঠানোর জন্য আপনার নাম, যোগাযোগের নম্বর ও ১২ সংখ্যার UPI UTR সংরক্ষণ করা হয়। হার্ডকপি বই ও ফিজিক্যাল প্রোডাক্ট ডেলিভারির জন্য আপনার সম্পূর্ণ ঠিকানা ও PIN কোড সংগ্রহ করা হয়।</p>
           </div>
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
             <h4 class="font-bold text-antiqueGold text-sm">২. ব্যাংকিং ও পেমেন্ট নিরাপত্তা</h4>
-            <p>KothaVerse কখনোই আপনার UPI PIN, ব্যাংক পাসওয়ার্ড বা কার্ডের গোপন তথ্য চায় না কিংবা সংরক্ষণ করে না। সমস্ত লেনদেন সরাসরি আপনার নিজস্ব UPI অ্যাপের মাধ্যমে সম্পন্ন হয়।</p>
+            <p>KothaVerse কখনোই আপনার UPI PIN, ব্যাংক পাসওয়ার্ড বা কার্ডের গোপন তথ্য চায় না কিংবা সংরক্ষণ করে না। সমস্ত প্রিপেইড লেনদেন সরাসরি আপনার নিজস্ব UPI অ্যাপের মাধ্যমে এবং COD অর্ডার ডেলিভারির সময় সম্পন্ন হয়।</p>
           </div>
-          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-2">
-            <h4 class="font-bold text-antiqueGold text-sm">৩. তথ্যের গোপনীয়তা</h4>
-            <p>আপনার ব্যক্তিগত তথ্য, মোবাইল নম্বর বা অর্ডারের বিবরণ কোনো তৃতীয় পক্ষ বা বিজ্ঞাপন সংস্থার কাছে বিক্রি বা শেয়ার করা হয় না।</p>
+          <div class="p-3.5 rounded-2xl bg-deepPurple/30 border border-antiqueGold/20 space-y-1.5">
+            <h4 class="font-bold text-antiqueGold text-sm">৩. তথ্যের গোপনীয়তা ও কুরিয়ার শেয়ারিং</h4>
+            <p>আপনার ব্যক্তিগত তথ্য কোনো বিজ্ঞাপন সংস্থা বা তৃতীয় পক্ষের কাছে বিক্রি করা হয় না। শুধুমাত্র হার্ডকপি বই বা ফিজিক্যাল পার্সেল আপনার ঠিকানায় পৌঁছে দেওয়ার প্রয়োজনে প্রাপকের নাম, ফোন নম্বর ও ঠিকানা অনুমোদিত কুরিয়ার পার্টনারের (যেমন India Post, Delhivery, DTDC) সাথে শেয়ার করা হয়।</p>
           </div>
         `}
       </div>
