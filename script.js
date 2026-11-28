@@ -9540,6 +9540,23 @@ async function renderMyPhysicalOrdersSection(containerId = 'kv-physical-orders-r
                       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-antiqueGold text-midnight font-bold text-[11px] shadow-gold hover:opacity-90 transition">
                       <i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF ইনভয়েস ডাউনলোড
                     </button>
+   
+                  </div>
+                  <div class="text-right text-[11px] text-ivory/65 space-y-1.5">
+                    <div>${new Date(ord.created_at).toLocaleDateString('bn-IN')}</div>
+                    ${ord.expected_delivery ? `<div class="text-emerald-300 font-semibold">সম্ভাব্য ডেলিভারি: ${_kvEsc(ord.expected_delivery)}</div>` : ''}
+                    <div class="flex flex-wrap justify-end gap-2 pt-1">
+                      <button type="button" onclick="downloadKvPhysicalInvoice('${ord.id}', 'buyer')"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-antiqueGold text-midnight font-bold text-[11px] shadow-gold hover:opacity-90 transition">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF ইনভয়েস
+                      </button>
+                      ${['placed', 'confirmed', 'packed'].includes(ord.delivery_status) ? `
+                        <button type="button" onclick="openKvCancelOrderModal('${ord.id}', '${_kvEsc(ord.order_code)}', '${_kvEsc(ord.payment_method)}')"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-400/40 text-red-300 hover:bg-red-500 hover:text-white font-semibold text-[11px] transition">
+                          <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> অর্ডার বাতিল
+                        </button>
+                      ` : ''}
+                    </div>
                   </div>
                   
                 </div>
@@ -10765,6 +10782,111 @@ async function downloadKvPhysicalInvoice(orderId, source = 'buyer') {
   } catch (err) {
     console.error('Invoice generation error:', err);
     showToast('Invoice error: ' + (err?.message || err), 'error');
+  }
+}
+// =========================================================================
+// CUSTOMER SELF-CANCEL ORDER (ALLOWED ONLY BEFORE "SHIPPED" STATUS)
+// =========================================================================
+function openKvCancelOrderModal(orderId, orderCode, paymentMethod = 'UPI') {
+  let modal = document.getElementById('kv-cancel-order-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'kv-cancel-order-modal';
+    modal.className = 'fixed inset-0 z-[110] bg-black/80 backdrop-blur-md hidden items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="w-full max-w-md rounded-3xl bg-midnight border border-red-400/40 shadow-card p-6 font-bengali my-auto fade-in space-y-4">
+      <div class="flex items-start justify-between gap-3 border-b border-antiqueGold/20 pb-3">
+        <div>
+          <h3 class="text-lg font-bold text-red-300 flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i> অর্ডার বাতিল নিশ্চিত করুন
+          </h3>
+          <p class="text-xs font-mono text-antiqueGold mt-0.5">অর্ডার #${_kvEsc(orderCode)}</p>
+        </div>
+        <button type="button" onclick="closeKvCancelOrderModal()" class="p-1.5 rounded-xl bg-deepPurple/60 text-ivory hover:text-antiqueGold">✕</button>
+      </div>
+
+      <form onsubmit="submitKvCancelOrder(event, '${orderId}')" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-ivory/80 mb-1.5 font-semibold">বাতিল করার কারণ নির্বাচন করুন*</label>
+          <select id="kv-cancel-preset" onchange="const custom=document.getElementById('kv-cancel-custom'); custom.classList.toggle('hidden', this.value !== 'CUSTOM');"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-deepPurple/45 border border-antiqueGold/25 text-ivory">
+            <option value="ভুল ঠিকানা বা মোবাইল নম্বর দেওয়া হয়েছে">ভুল ঠিকানা বা মোবাইল নম্বর দেওয়া হয়েছে</option>
+            <option value="অন্য প্রোডাক্ট বা অতিরিক্ত আইটেম যোগ করে আবার অর্ডার করব">অন্য প্রোডাক্ট বা অতিরিক্ত আইটেম যোগ করে আবার অর্ডার করব</option>
+            <option value="পেমেন্ট বা ডেলিভারি সময় সংক্রান্ত পরিবর্তন">পেমেন্ট বা ডেলিভারি সময় সংক্রান্ত পরিবর্তন</option>
+            <option value="বর্তমানে প্রোডাক্টটি প্রয়োজন নেই">বর্তমানে প্রোডাক্টটি প্রয়োজন নেই</option>
+            <option value="CUSTOM">অন্যান্য কারণ (নিচে লিখুন)</option>
+          </select>
+        </div>
+
+        <textarea id="kv-cancel-custom" rows="2" placeholder="আপনার কারণ লিখুন..." class="hidden w-full px-3.5 py-2.5 rounded-xl bg-midnight border border-antiqueGold/25 text-ivory"></textarea>
+
+        ${paymentMethod === 'UPI' ? `
+          <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-400/30 text-[11px] text-amber-200 leading-relaxed">
+            আপনি ইতিমধ্যে UPI পেমেন্ট করে থাকলে অর্ডার বাতিলের পর যাচাই সাপেক্ষে <strong>৩-৫ কার্যদিবসের</strong> মধ্যে আপনার মূল UPI অ্যাকাউন্টে রিফান্ড পাঠানো হবে।
+          </div>
+        ` : ''}
+
+        <div class="flex items-center justify-end gap-2.5 pt-2">
+          <button type="button" onclick="closeKvCancelOrderModal()" class="px-4 py-2 rounded-xl border border-ivory/20 text-ivory/80 hover:bg-deepPurple/50">
+            ফিরে যান
+          </button>
+          <button id="kv-cancel-submit-btn" type="submit" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow">
+            হ্যাঁ, অর্ডার বাতিল করুন
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeKvCancelOrderModal() {
+  const modal = document.getElementById('kv-cancel-order-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function submitKvCancelOrder(e, orderId) {
+  e.preventDefault();
+  const btn = document.getElementById('kv-cancel-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'বাতিল হচ্ছে...'; }
+
+  try {
+    const preset = document.getElementById('kv-cancel-preset')?.value || '';
+    const custom = (document.getElementById('kv-cancel-custom')?.value || '').trim();
+    const finalReason = preset === 'CUSTOM' ? (custom || 'ক্রেতা কর্তৃক বাতিল') : preset;
+
+    const { data, error } = await sb.rpc('cancel_my_physical_order', {
+      p_order_id: orderId,
+      p_reason: finalReason
+    });
+
+    if (error) throw error;
+
+    closeKvCancelOrderModal();
+    const isUpi = data?.payment_method === 'UPI' && data?.payment_status !== 'rejected';
+    showToast(
+      isUpi
+        ? `অর্ডার #${data.order_code} বাতিল হয়েছে। UPI পেমেন্ট যাচাই সাপেক্ষে ৩-৫ কার্যদিবসে রিফান্ড করা হবে।`
+        : `অর্ডার #${data?.order_code || ''} সফলভাবে বাতিল করা হয়েছে।`,
+      'success'
+    );
+
+    await Promise.all([
+      renderMyPhysicalOrdersSection('kv-physical-orders-root'),
+      fetchPhysicalProducts(false)
+    ]);
+  } catch (err) {
+    showToast(err?.message || 'অর্ডার বাতিল করা যায়নি।', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'হ্যাঁ, অর্ডার বাতিল করুন'; }
   }
 }
 
