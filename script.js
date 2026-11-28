@@ -4945,7 +4945,6 @@ function renderStorePage() {
     ...(state.storeSettings || {})
   };
 
-  // [CHANGE 1] Tab onujayi Physical Products ar Order Tracking alada load hobe
   if (tab === 'voice') {
     setTimeout(() => {
       if (typeof recalcVoiceOrderTotal === 'function') recalcVoiceOrderTotal();
@@ -4954,12 +4953,6 @@ function renderStorePage() {
     setTimeout(() => {
       if (typeof renderPhysicalStoreSection === 'function') {
         renderPhysicalStoreSection('kv-physical-store-root');
-      }
-    }, 50);
-  } else if (tab === 'my_orders') {
-    setTimeout(() => {
-      if (typeof renderMyPhysicalOrdersSection === 'function') {
-        renderMyPhysicalOrdersSection('kv-physical-orders-root');
       }
     }, 50);
   }
@@ -5019,10 +5012,11 @@ function renderStorePage() {
                       </button>
                     `}
                     ${cfg.gift_ebook_enabled !== false ? `
-                      <button onclick="openGiftEbookModal('${b.id}')" class="w-full py-2 rounded-xl bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                        <i data-lucide="gift" class="w-3.5 h-3.5"></i> প্রিয়জনকে গিফট করুন
-                      </button>
-                    ` : ''}
+                        <button onclick="openGiftEbookModal('${b.id}')" class="w-full py-2 rounded-xl bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                          <i data-lucide="gift" class="w-3.5 h-3.5"></i> প্রিয়জনকে গিফট করুন
+                        </button>
+                      ` : ''}
+
                     ${hasSample && !isApproved ? `
                       <button onclick="openEbookSamplePreview('${b.id}')" class="w-full py-2 rounded-xl bg-deepPurple/60 border border-antiqueGold/35 text-antiqueGold hover:bg-antiqueGold hover:text-midnight text-xs font-semibold transition flex items-center justify-center gap-1.5">
                         <i data-lucide="eye" class="w-3.5 h-3.5"></i> ফ্রি স্যাম্পল প্রিভিউ পড়ুন
@@ -5041,11 +5035,7 @@ function renderStorePage() {
       ` : tab === 'gift_wallet' ? `
         ${typeof renderStoreGiftAndWalletTab === 'function' ? renderStoreGiftAndWalletTab() : ''}
       ` : tab === 'my_orders' ? `
-        <!-- [CHANGE 2] Ekhane ager digital order-er nichei physical order tracking dekhabe -->
-        <div class="space-y-8">
-          ${typeof renderStoreMyOrdersTab === 'function' ? renderStoreMyOrdersTab() : ''}
-          <div id="kv-physical-orders-root"></div>
-        </div>
+        ${typeof renderStoreMyOrdersTab === 'function' ? renderStoreMyOrdersTab() : ''}
       ` : `
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2 glass-panel rounded-3xl p-6 sm:p-8 border border-antiqueGold/30">
